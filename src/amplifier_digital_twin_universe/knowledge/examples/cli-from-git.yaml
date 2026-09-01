@@ -1,0 +1,19 @@
+name: cli-from-git
+description: >
+  A Python CLI installed from a git repository, verified to run from a clean host.
+base:
+  image: ubuntu:24.04
+  config:
+    limits.cpu: "2"
+    limits.memory: 4GiB
+
+provision:
+  setup_cmds:
+    - apt-get update && apt-get install -y --no-install-recommends git curl ca-certificates
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - uv tool install git+https://github.com/astral-sh/ruff-lsp
+    - ruff-lsp --help
+
+readiness:
+  - name: cli-on-path
+    command: ruff-lsp --help

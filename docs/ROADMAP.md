@@ -1,0 +1,7 @@
+- Reap environments automatically after an idle period, instead of requiring an explicit `destroy`.
+- Session-scoped `list`, so an agent sees only the environments it launched.
+- A `manage` action that reads back a diagnosis and applies its remedy commands, with confirmation.
+- Support for a Colima-backed macOS path, rather than punting entirely to the upstream Incus/Colima docs.
+- Cache `probe()` results for a short window so repeated model-backed calls do not re-measure the host each time.
+- A `manage` action for `update` across every environment launched from one profile.
+- Streaming progress for `launch` over stderr in a structured form, not just text narration.

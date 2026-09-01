@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Cloned outside the checkout: the kit carries its own SMART_TOOL.md
+      # fixtures and its own formatting, so an in-tree copy lands under this
+      # repo's ruff, pytest, and manifest rules.
+      - name: Clone the smart-tools spec for its conformance kit
+        run: |
+          git clone --depth 1 https://github.com/microsoft/amplifier-smart-tools \
+            "$RUNNER_TEMP/amplifier-smart-tools"
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+
+      - run: uv sync --all-groups
+
+      - name: Format
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Tests
+        run: uv run pytest -q
+
+      # The kit never installs the tool under test, so the console script named
+      # by cli_argv has to resolve on PATH before the runtime rules can run.
+      # Without this they SKIP, and a SKIP is not a FAIL -- CI would stay green
+      # while testing nothing.
+      #
+      # `uv run --no-project` starts the kit from the dependencies it declares in
+      # its own inline script metadata. Running it under a bare interpreter would
+      # instead borrow whatever happens to be importable from .venv, coupling the
+      # kit's dependency set to this tool's.
+      - name: Smart-tools conformance
+        run: |
+          export PATH="$PWD/.venv/bin:$PATH"
+          uv run --no-project "$RUNNER_TEMP/amplifier-smart-tools/conformance/run.py" .

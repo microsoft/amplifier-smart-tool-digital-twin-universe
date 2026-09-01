@@ -1,0 +1,5 @@
+{
+  "manifest": "src/amplifier_digital_twin_universe/SMART_TOOL.md",
+  "cli_argv": ["amplifier-digital-twin-universe"],
+  "deterministic_smoke": ["manifest"]
+}
