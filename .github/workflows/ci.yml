@@ -9,7 +9,7 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Cloned outside the checkout: the kit carries its own SMART_TOOL.md
       # fixtures and its own formatting, so an in-tree copy lands under this
@@ -19,7 +19,7 @@ jobs:
           git clone --depth 1 https://github.com/microsoft/amplifier-smart-tools \
             "$RUNNER_TEMP/amplifier-smart-tools"
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
 
