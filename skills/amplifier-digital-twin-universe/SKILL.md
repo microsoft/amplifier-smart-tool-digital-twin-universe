@@ -91,10 +91,12 @@ check              what this host can do right now
 validate-profile   whether a profile document is launchable
 launch             stand up an environment from a profile path
 exec               run one command inside and capture its output
-status list        what exists, and what state it is in
+status             one environment's state and access URLs
+list               every environment on this host
 check-readiness    evaluate an environment's readiness checks once
 update             re-run an environment's update commands in place
-file-push file-pull   move files in and out
+file-push          copy host paths in
+file-pull          copy environment paths out
 destroy            tear one down
 ```
 
@@ -106,6 +108,10 @@ install            ordered steps to make this host able to launch
 doctor             diagnose a symptom against measured evidence
 manage             turn a request in words into deterministic actions
 ```
+
+A model-backed capability reasons over measured evidence and takes minutes, up to tens
+of minutes for a broad request. Give it a timeout sized for that, and poll rather than
+blocking on a short one.
 
 ## Working with environments
 
