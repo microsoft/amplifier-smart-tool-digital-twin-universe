@@ -16,15 +16,7 @@ import shlex
 import sys
 from typing import Any, NoReturn
 
-from amplifier_digital_twin_universe.catalog import (
-    BY_NAME,
-    PROG,
-    TERSE,
-    Capability,
-    capability_help,
-    full_help,
-    terse_help,
-)
+from amplifier_digital_twin_universe.catalog import BY_NAME, PROG, capability_help, skill, terse_help
 from amplifier_digital_twin_universe.create import DEFAULT_MAX_ATTEMPTS, create_profile
 from amplifier_digital_twin_universe.doctor import diagnose
 from amplifier_digital_twin_universe.environments import (
@@ -63,6 +55,8 @@ _EXIT_FOR_ERROR = {
     MissingPrerequisiteError: EXIT_MISSING_PREREQUISITE,
 }
 
+_HELP_REMEDY = f"Run '{PROG} -h' for the capabilities, and '{PROG} <capability> --help' for the arguments one takes."
+
 
 # ----------------------------------------------------------------- output
 
@@ -87,12 +81,7 @@ def _attempt(operation: Callable[[], Any], *, failed: Callable[[Any], bool] | No
     except SmartToolError as exc:
         return _emit_error(exc.code, exc.message, exc.remedy, _EXIT_FOR_ERROR.get(type(exc), EXIT_FAILED))
     except ValueError as exc:
-        return _emit_error(
-            "bad_invocation",
-            str(exc),
-            f"Run '{PROG} --help' for the arguments each capability takes.",
-            EXIT_BAD_INVOCATION,
-        )
+        return _emit_error("bad_invocation", str(exc), _HELP_REMEDY, EXIT_BAD_INVOCATION)
     _emit({"result": result})
     return EXIT_FAILED if failed is not None and failed(result) else EXIT_OK
 
@@ -107,12 +96,7 @@ class _EnvelopeParser(argparse.ArgumentParser):
     """
 
     def error(self, message: str) -> NoReturn:
-        _emit_error(
-            "bad_invocation",
-            message,
-            f"Run '{PROG} --help' for the full list of capabilities and their arguments.",
-            EXIT_BAD_INVOCATION,
-        )
+        _emit_error("bad_invocation", message, _HELP_REMEDY, EXIT_BAD_INVOCATION)
         raise SystemExit(EXIT_BAD_INVOCATION)
 
 
@@ -367,26 +351,15 @@ def _parse_timeout(value: str) -> int | None:
 # -------------------------------------------------------------------- help
 
 
-class _TerseHelpAction(argparse.Action):
-    """`-h` prints the short summary; `--help` prints the complete listing."""
+class _PrintHelpAction(argparse.Action):
+    """Print what a callable renders, then exit 0."""
 
-    def __init__(self, option_strings: list[str], dest: str, **kwargs: Any) -> None:
+    def __init__(self, option_strings: list[str], dest: str, render: Callable[[], str], **kwargs: Any) -> None:
         super().__init__(option_strings, dest, nargs=0, **kwargs)
+        self.render = render
 
     def __call__(self, parser: argparse.ArgumentParser, *_rest: Any) -> NoReturn:
-        sys.stdout.write(terse_help())
-        raise SystemExit(EXIT_OK)
-
-
-class _CapabilityHelpAction(argparse.Action):
-    """`--help` on a capability: everything needed to call that capability."""
-
-    def __init__(self, option_strings: list[str], dest: str, capability: Capability, **kwargs: Any) -> None:
-        super().__init__(option_strings, dest, nargs=0, **kwargs)
-        self.capability = capability
-
-    def __call__(self, parser: argparse.ArgumentParser, *_rest: Any) -> NoReturn:
-        sys.stdout.write(capability_help(self.capability))
+        sys.stdout.write(self.render())
         raise SystemExit(EXIT_OK)
 
 
@@ -401,8 +374,8 @@ def _add(sub: argparse._SubParsersAction, name: str, handler: Callable[..., int]
     parser.add_argument("-h", action="help", help="Terse summary for a person.")
     parser.add_argument(
         "--help",
-        action=_CapabilityHelpAction,
-        capability=capability,
+        action=_PrintHelpAction,
+        render=lambda: capability_help(capability),
         help="Everything an agent needs to call this capability.",
     )
     parser.set_defaults(func=handler)
@@ -430,19 +403,9 @@ def _add_model_options(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = _EnvelopeParser(
-        prog=PROG,
-        description=TERSE,
-        epilog=full_help(),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        add_help=False,
-    )
-    parser.add_argument("-h", action=_TerseHelpAction, help="Terse summary for a person.")
-    parser.add_argument(
-        "--help",
-        action="help",
-        help="Complete capability listing for an agent deciding how to call this tool.",
-    )
+    parser = _EnvelopeParser(prog=PROG, add_help=False)
+    parser.add_argument("-h", action=_PrintHelpAction, render=terse_help, help="Terse summary for a person.")
+    parser.add_argument("--help", action=_PrintHelpAction, render=skill, help="This tool's skill, for an agent.")
 
     sub = parser.add_subparsers(dest="capability")
 
@@ -564,12 +527,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "capability", None):
-        return _emit_error(
-            "no_capability",
-            "No capability was named.",
-            f"Run '{PROG} --help' to see the available capabilities.",
-            EXIT_BAD_INVOCATION,
-        )
+        return _emit_error("no_capability", "No capability was named.", _HELP_REMEDY, EXIT_BAD_INVOCATION)
     try:
         return int(args.func(args))
     except Exception as exc:

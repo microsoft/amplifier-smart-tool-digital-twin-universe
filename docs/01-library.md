@@ -14,8 +14,26 @@ def load_manifest() -> Manifest
 ```
 
 - Returns a `Manifest` with `smart_tool_format`, `name`, `version`,
-  `description`, `use_cases`, `platforms`, and `requires` (a list of
-  `Requirement`, each with `name`, `purpose`, `install`, `optional`).
+  `description`, `use_cases`, `platforms`, `requires` (a list of
+  `Requirement`, each with `name`, `purpose`, `install`, `optional`), and
+  `body`, the Markdown below the frontmatter.
+
+## skill
+
+Renders the tool's skill: the manifest body under a heading carrying the tool's
+name, a generated line per capability pointing at its own `--help`, and the
+files the body refers to. This is what the CLI prints for `--help`.
+Deterministic. Requires no model provider.
+
+```python
+def skill() -> str
+```
+
+The pieces it is built from are in `amplifier_digital_twin_universe.catalog`:
+`skill_directory()` (the installed package root), `repository()` (the source
+URL from the package metadata, or `None`), `skill_resources()` (paths relative
+to the skill directory), and `CAPABILITIES` (one record per capability, each
+with `name`, `kind`, and `summary`).
 
 ## probe
 

@@ -8,7 +8,7 @@ import sys
 import pytest
 
 from amplifier_digital_twin_universe import MODEL_BACKED_CAPABILITIES, MissingPrerequisiteError
-from amplifier_digital_twin_universe.catalog import CAPABILITIES
+from amplifier_digital_twin_universe.catalog import CAPABILITIES, skill, skill_directory, skill_resources
 from amplifier_digital_twin_universe.cli import main
 from amplifier_digital_twin_universe.intelligence.amplifier import _require_git
 from amplifier_digital_twin_universe.manifest import load_manifest, package_version
@@ -105,7 +105,7 @@ def test_model_backed_capabilities_disclose_themselves(capsys) -> None:
         assert f"[{expected}]" in completed.stdout, capability.name
 
 
-def test_terse_and_full_help_are_not_the_same_output() -> None:
+def test_terse_help_and_the_skill_are_not_the_same_output() -> None:
     terse = subprocess.run([*_CLI, "-h"], capture_output=True, text=True, check=False)
     full = subprocess.run([*_CLI, "--help"], capture_output=True, text=True, check=False)
     assert terse.returncode == full.returncode == 0
@@ -113,3 +113,40 @@ def test_terse_and_full_help_are_not_the_same_output() -> None:
     for capability in CAPABILITIES:
         assert capability.name in terse.stdout
         assert capability.name in full.stdout
+
+
+def test_help_prints_the_skill_the_library_renders() -> None:
+    """The CLI adds nothing: `--help` is the library's skill, byte for byte."""
+    completed = subprocess.run([*_CLI, "--help"], capture_output=True, text=True, check=False)
+    assert completed.returncode == 0
+    assert not completed.stderr
+    assert completed.stdout == skill()
+
+
+def test_the_skill_has_the_shape_of_an_agent_skill() -> None:
+    rendered = skill()
+    assert rendered.startswith('<skill_content name="amplifier-digital-twin-universe">\n')
+    assert rendered.rstrip("\n").endswith("</skill_content>")
+    assert f"Skill directory: {skill_directory()}\n" in rendered
+    assert "Repository: https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe\n" in rendered
+    assert "\n# amplifier-digital-twin-universe\n" in rendered
+    assert load_manifest().body in rendered
+    assert "\n## Capabilities\n" in rendered
+    for capability in CAPABILITIES:
+        assert f"- `{capability.name}` [{capability.kind}] -- " in rendered
+        assert f"`amplifier-digital-twin-universe {capability.name} --help`" in rendered
+    assert "<skill_resources>\n" in rendered
+    for path in skill_resources():
+        assert f"  <file>{path}</file>\n" in rendered
+
+
+def test_every_skill_resource_ships_inside_the_package() -> None:
+    """A path the skill promises has to resolve wherever the package is installed."""
+    for path in skill_resources():
+        assert (skill_directory() / path).is_file(), path
+    assert "SMART_TOOL.md" in skill_resources()
+
+
+def test_the_manifest_body_carries_no_heading_of_its_own() -> None:
+    """The skill supplies the `# name` heading; a second one in the body would render twice."""
+    assert not load_manifest().body.startswith("# ")

@@ -52,7 +52,7 @@ amplifier-digital-twin-universe manage --request "tear down every stopped enviro
 ```
 
 Every result is one JSON document on stdout. `-h` is the terse summary for a person;
-`--help` is the complete listing for an agent. See the
+`--help` is the tool's skill, for an agent. See the
 [CLI reference](docs/03-cli.md) for every flag, and the
 [library reference](docs/01-library.md) for the same capabilities as Python.
 
