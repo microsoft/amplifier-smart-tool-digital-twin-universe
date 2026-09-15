@@ -42,7 +42,10 @@ and "this works where it will actually run."
 **The library is the tool.** `amplifier_digital_twin_universe` holds every capability.
 The CLI is a thin wrapper over it, so anything you can do from the shell you can also
 do from Python. Confirm every capability, argument, and field name against
-`<capability> --help` or the library's own signatures before writing code.
+`<capability> --help` or the library's own signatures before writing code. To chain
+capabilities, such as launch, exec, and destroy in one flow, or to combine them with other
+smart tools, write a script against the libraries and pass return values between calls
+rather than piping CLI output.
 
 ## When to reach for it
 
