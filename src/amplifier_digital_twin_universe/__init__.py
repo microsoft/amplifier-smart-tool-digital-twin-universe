@@ -7,6 +7,7 @@ Nothing in this module requires a model provider at import time. Model-backed
 capabilities fail loudly, naming the remedy, only when actually invoked.
 """
 
+from amplifier_digital_twin_universe.catalog import MODEL_BACKED_CAPABILITIES, skill
 from amplifier_digital_twin_universe.create import ProfileDraft, create_profile
 from amplifier_digital_twin_universe.doctor import Diagnosis, Finding, diagnose, gather_evidence
 from amplifier_digital_twin_universe.environments import (
@@ -82,12 +83,8 @@ __all__ = [
     "pull_files",
     "push_files",
     "run",
+    "skill",
     "status",
     "update",
     "validate_profile",
 ]
-
-# Which capabilities consult a model. Declared here so a caller can read it
-# programmatically and make cost and determinism decisions before invoking.
-# Everything not listed is deterministic and runs with no provider configured.
-MODEL_BACKED_CAPABILITIES: tuple[str, ...] = ("create_profile", "diagnose", "manage", "plan_install")

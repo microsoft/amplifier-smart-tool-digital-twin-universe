@@ -35,11 +35,14 @@ requires:
     install: docs/installing-incus.md
 ---
 
-# amplifier-digital-twin-universe
-
 A Digital Twin Universe (DTU) is a complete, isolated environment stood up on demand
 from a declarative profile. It closes the gap between "the tests pass on my machine"
 and "this works where it will actually run."
+
+**The library is the tool.** `amplifier_digital_twin_universe` holds every capability.
+The CLI is a thin wrapper over it, so anything you can do from the shell you can also
+do from Python. Confirm every capability, argument, and field name against
+`<capability> --help` or the library's own signatures before writing code.
 
 ## When to reach for it
 
@@ -53,15 +56,34 @@ and "this works where it will actually run."
 Not for pure logic you can test in-process. Standing up an environment costs seconds to
 minutes; a function call costs microseconds.
 
-## Straight and smart paths
+## Install
 
-`manifest`, `check`, `validate-profile`, `launch`, `exec`, `status`, `list`,
-`check-readiness`, `update`, `file-push`, `file-pull`, and `destroy` are deterministic
-and run with no model provider configured.
+```bash
+# as a CLI
+uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
 
-`create-profile`, `install`, `doctor`, and `manage` are model-backed. They consume
-tokens, may answer differently on a second run, and fail saying so when no provider is
-configured rather than returning a lesser answer.
+# as a library
+uv add "amplifier-digital-twin-universe @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+```
+
+## Prerequisites
+
+Ask the tool rather than assuming. `check` measures this host and reports what is
+present, what is absent, and what each absence costs.
+
+`incus` runs the environments; without it nothing launches. `docker` runs mock service
+sidecars; without it everything works except profiles that declare sidecars. `git` is
+required by the model-backed capabilities. `avahi` publishes `.local` hostnames. Linux
+only. `knowledge/installing.md` covers installing each one.
+
+## Model-backed capabilities
+
+`create-profile`, `install`, `doctor`, and `manage` consume tokens, may answer
+differently on a second run, and fail saying so when no provider is configured rather
+than returning a lesser answer. Each reasons over measured evidence and takes minutes,
+up to tens of minutes for a broad request; size the timeout for that and poll rather
+than blocking on a short one. Every other capability is deterministic and runs with no
+model provider configured.
 
 ## Worked invocations
 
@@ -78,6 +100,7 @@ amplifier-digital-twin-universe create-profile \
 
 # stand it up, exercise it, take the results out, delete it
 amplifier-digital-twin-universe launch --profile profile.yaml
+amplifier-digital-twin-universe check-readiness --id dtu-1a2b3c4d
 amplifier-digital-twin-universe exec --id dtu-1a2b3c4d --command "curl -sf localhost:8000/health"
 amplifier-digital-twin-universe file-pull --id dtu-1a2b3c4d --source /var/log/app.log --destination ./
 amplifier-digital-twin-universe destroy --id dtu-1a2b3c4d
@@ -90,6 +113,15 @@ amplifier-digital-twin-universe manage --request "tear down every stopped enviro
 amplifier-digital-twin-universe manage --request "tear down every stopped environment" --confirmed
 ```
 
+## Output and failure contract
+
+Every invocation writes exactly one JSON document to stdout. A success carries
+`result`. A failure carries `error` with a `code` to branch on, a `message`, and a
+`remedy` to act on, and exits non-zero: `2` bad invocation, `3` a model-backed
+capability with no provider configured, `4` a required prerequisite is missing, `5` the
+capability ran and failed. Never parse prose out of a failure, and never treat an empty
+result as success.
+
 ## Sharp edges
 
 - Environments are ephemeral, and nothing reaps them. Anything worth keeping leaves
@@ -101,12 +133,17 @@ amplifier-digital-twin-universe manage --request "tear down every stopped enviro
 - A profile is named by path. Profile names that live inside the engine's own
   repository do not resolve from an installed package.
 - `manage` plans without changing anything. It runs only with `--confirmed`, which
-  authorizes one invocation and nothing else.
+  authorizes one invocation and nothing else. Read the plan before confirming it.
 - `install` and `doctor` propose; they never install, configure, or repair anything.
 - `exec` captures output and returns it. For an interactive shell inside an
   environment, use the engine's own `amplifier-digital-twin exec`.
 - The model-backed capabilities send host evidence, and whatever context you pass, to
   the model provider.
 
-The library, its configuration, and the full CLI surface are documented in the
-repository's `docs/` directory.
+## Reading more
+
+`knowledge/profile-authoring.md` is the profile schema and the rules for a profile that
+launches, for writing one by hand instead of through `create-profile`.
+`knowledge/troubleshooting.md` is symptom, cause, and remedy for the host and the
+runtime. The library, its configuration, and the full CLI surface are documented under
+`docs/` in the repository.

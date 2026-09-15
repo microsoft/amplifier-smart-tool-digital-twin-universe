@@ -1,9 +1,9 @@
 """What this tool can do, said once.
 
 One record per capability feeds every reader: the terse summary a person gets
-from `-h`, the complete listing an agent gets from `--help`, and the per
-capability help at both levels. Nothing here restates anything else, so the
-renderings cannot disagree with each other.
+from `-h`, the skill an agent gets from `--help`, and the per capability help at
+both levels. Nothing here restates anything else, so the renderings cannot
+disagree with each other.
 
 Each record names the library function behind the capability. That name is what
 decides whether the capability is model-backed, so the CLI never keeps a second
@@ -12,18 +12,31 @@ list of its own.
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, metadata
+from pathlib import Path
 import textwrap
 from typing import NamedTuple
 
-from amplifier_digital_twin_universe import MODEL_BACKED_CAPABILITIES
+from amplifier_digital_twin_universe.manifest import ManifestError, load_manifest
 
 PROG = "amplifier-digital-twin-universe"
 TERSE = "Stand up isolated, realistic environments from a declarative profile."
 
+# Which capabilities consult a model, by library function name. A caller reads
+# it to make cost and determinism decisions before invoking. Everything not
+# listed is deterministic and runs with no provider configured.
+MODEL_BACKED_CAPABILITIES: tuple[str, ...] = ("create_profile", "diagnose", "manage", "plan_install")
+
+# Files the skill body refers to, relative to the skill directory. Each ships
+# inside the package, so every path resolves after installation.
+SKILL_RESOURCES: tuple[str, ...] = (
+    "SMART_TOOL.md",
+    "knowledge/installing.md",
+    "knowledge/profile-authoring.md",
+    "knowledge/troubleshooting.md",
+)
+
 HELP_WIDTH = 78
-_NAME_COLUMN = 18
-_KIND_COLUMN = 17
-_FIELD_INDENT = " " * (2 + _NAME_COLUMN)
 
 OUTPUT_NOTE = (
     'Output: one JSON document on stdout. Failures emit\n{"error": {"code", "message", "remedy"}} and exit non-zero.\n'
@@ -38,11 +51,6 @@ MODEL_BACKED_NOTE = (
 DETERMINISTIC_NOTE = (
     "This capability is deterministic: it returns the same answer every time and\n"
     "runs with no model provider configured.\n"
-)
-
-EXIT_SUMMARY = (
-    "Exit codes: 0 success, 2 bad invocation, 3 no model provider configured,\n"
-    "4 missing prerequisite, 5 the capability ran and failed.\n"
 )
 
 
@@ -344,33 +352,73 @@ CAPABILITIES = (
 
 BY_NAME = {capability.name: capability for capability in CAPABILITIES}
 
-MODEL_BACKED_LINE = (
-    "Model-backed capabilities: "
-    + ", ".join(capability.name for capability in CAPABILITIES if capability.model_backed)
-    + ". These consume\ntokens and may return a different answer on a second run. They fail rather than\n"
-    "degrade when no provider is configured. Every other capability is deterministic\n"
-    "and runs with no model provider configured.\n"
-)
-
 
 def terse_help() -> str:
     """The short summary a person reads."""
     lines = "".join(f"  {capability.name:<19}{capability.summary}\n" for capability in CAPABILITIES)
-    return f"{PROG} -- {TERSE}\n\nCapabilities:\n{lines}\nRun '{PROG} --help' for the complete listing.\n"
-
-
-def full_help() -> str:
-    """The complete listing an agent reads before deciding how to call this tool."""
     return (
-        "Capabilities:\n"
-        + "\n".join(_compact_block(capability) for capability in CAPABILITIES)
-        + "\n"
-        + MODEL_BACKED_LINE
-        + "\n"
-        + OUTPUT_NOTE
-        + "\n"
-        + EXIT_SUMMARY
+        f"{PROG} -- {TERSE}\n\nCapabilities:\n{lines}\n"
+        f"Run '{PROG} --help' for this tool's skill.\n"
+        f"Run '{PROG} <capability> --help' for one capability in full.\n"
     )
+
+
+def skill_directory() -> Path:
+    """The installed package root, resolved at runtime."""
+    return Path(__file__).resolve().parent
+
+
+def repository() -> str | None:
+    """The canonical source URL from the package metadata, or None when it declares none."""
+    try:
+        urls = metadata("amplifier-digital-twin-universe").get_all("Project-URL") or []
+    except PackageNotFoundError:
+        return None
+    for entry in urls:
+        label, _, url = entry.partition(",")
+        if label.strip().lower() == "repository":
+            return url.strip()
+    return None
+
+
+def skill_resources() -> list[str]:
+    """The files the skill body refers to, relative to the skill directory."""
+    return list(SKILL_RESOURCES)
+
+
+def skill_body() -> str:
+    """The manifest body, or a note saying why it could not be read."""
+    try:
+        return load_manifest().body
+    except ManifestError as exc:
+        return f"(manifest unavailable: {exc})"
+
+
+def skill() -> str:
+    """The tool's skill, as `--help` prints it: an Agent Skill an agent reads once it has decided to use the tool."""
+    lines = [f'<skill_content name="{PROG}">', f"Skill directory: {skill_directory()}"]
+    source = repository()
+    if source:
+        lines.append(f"Repository: {source}")
+    lines += [
+        "Relative paths in this skill are relative to the skill directory.",
+        "",
+        f"# {PROG}",
+        "",
+        skill_body(),
+        "",
+        "## Capabilities",
+        "",
+    ]
+    lines += [
+        f"- `{capability.name}` [{capability.kind}] -- {capability.summary} "
+        f"Arguments, result, and exit codes: `{PROG} {capability.name} --help`."
+        for capability in CAPABILITIES
+    ]
+    lines += ["", "<skill_resources>"]
+    lines += [f"  <file>{path}</file>" for path in skill_resources()]
+    lines += ["</skill_resources>", "</skill_content>"]
+    return "\n".join(lines) + "\n"
 
 
 def capability_help(capability: Capability) -> str:
@@ -390,17 +438,6 @@ def capability_help(capability: Capability) -> str:
     disclosure = MODEL_BACKED_NOTE if capability.model_backed else DETERMINISTIC_NOTE
     lines += ["", *disclosure.rstrip("\n").split("\n")]
     lines += ["", *OUTPUT_NOTE.rstrip("\n").split("\n")]
-    return "\n".join(lines) + "\n"
-
-
-def _compact_block(capability: Capability) -> str:
-    kind = f"[{capability.kind}]"
-    lines = [f"  {capability.name:<{_NAME_COLUMN}}{kind:<{_KIND_COLUMN}}{capability.summary}"]
-    lines += _field("args", _tokens(capability.args, ",") or ["none"])
-    lines += _field("returns", capability.returns.split(" "))
-    lines += _field("exit", _tokens(capability.exits, ";"))
-    for note in capability.notes:
-        lines += _wrap(note, _FIELD_INDENT)
     return "\n".join(lines) + "\n"
 
 
@@ -429,14 +466,3 @@ def _pack(tokens: list[str], indent: str, continuation: str) -> list[str]:
             current = continuation + token
     lines.append(current)
     return lines
-
-
-def _tokens(items: tuple[str, ...], separator: str) -> list[str]:
-    """Items as wrap tokens, each carrying the separator that follows it."""
-    return [f"{item}{separator}" for item in items[:-1]] + list(items[-1:])
-
-
-def _field(label: str, tokens: list[str]) -> list[str]:
-    """A labelled field in the top-level listing, wrapped under its own label."""
-    first, *rest = tokens
-    return _pack([f"{label}: {first}", *rest], _FIELD_INDENT, _FIELD_INDENT + " " * (len(label) + 2))

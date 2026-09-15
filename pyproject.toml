@@ -16,6 +16,9 @@ dependencies = [
     "anthropic>=1.0,<2.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+
 [project.optional-dependencies]
 openai = ["openai>=1.0,<3.0"]
 gemini = ["google-genai>=1.0,<2.0"]

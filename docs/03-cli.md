@@ -3,8 +3,9 @@
 The CLI is a thin wrapper over the [library](01-library.md). Each command maps
 to one library capability; this page documents only the command-line surface:
 flags, defaults, output, and exit behavior. `-h` prints the terse summary for a
-person; `--help` prints the complete listing for an agent, and
-`<capability> --help` prints everything needed to call that one capability.
+person; `--help` prints the tool's skill, the guidance an agent reads once it has
+decided to use the tool; `<capability> --help` prints everything needed to call
+that one capability.
 
 ## manifest
 
