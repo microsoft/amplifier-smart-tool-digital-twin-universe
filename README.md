@@ -1,5 +1,7 @@
 # Digital Twin Universe Smart Tool
 
+[Branded website source and publishing guide](site/README.md)
+
 A [Smart Tool](https://github.com/microsoft/amplifier-smart-tools) that stands up
 isolated, realistic environments from a declarative profile, so software can be tested
 as though actually deployed. Every capability lives in the `amplifier_digital_twin_universe`

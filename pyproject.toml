@@ -42,6 +42,7 @@ dev = [
 ]
 
 [tool.ruff]
+extend-exclude = ["site/theme", "_site"]
 line-length = 120
 target-version = "py312"
 

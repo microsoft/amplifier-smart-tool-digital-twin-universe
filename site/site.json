@@ -1,0 +1,54 @@
+{
+  "key": "digital-twin-universe",
+  "name": "Digital Twin Universe",
+  "kind": "tool",
+  "title": "Digital Twin Universe | Amplifier Smart Tools",
+  "accent": "#356e63",
+  "promise": "Test where the software will live.",
+  "description": "Turn an environment profile into an isolated place to exercise your software. Digital Twin Universe helps create, launch, inspect, and manage realistic test environments.",
+  "image": "site/assets/digital-twin-universe.svg",
+  "alt": "Digital Twin Universe workflow diagram.",
+  "caption": "Workflow illustration.",
+  "width": 1200,
+  "height": 640,
+  "flow_title": "Describe it. Launch it. Exercise it.",
+  "flow_intro": "Turn an environment profile into an isolated place to exercise your software. Digital Twin Universe helps create, launch, inspect, and manage realistic test environments.",
+  "steps": [
+    [
+      "Describe the environment.",
+      "Author a profile from your requirements or validate one you already have."
+    ],
+    [
+      "Launch and exercise.",
+      "Start the environment, check readiness, run commands, and move files in and out."
+    ],
+    [
+      "Manage the lifecycle.",
+      "Inspect status, update the environment, and tear it down when the work is complete."
+    ]
+  ],
+  "detail_title": "Expertise your agent can put to work.",
+  "details": [
+    [
+      "Verify a fresh install.",
+      "Exercise a CLI or service in an environment separate from the development machine."
+    ],
+    [
+      "Model real dependencies.",
+      "Use profiles with mock service sidecars to test integrations."
+    ],
+    [
+      "Diagnose the environment.",
+      "Ask for an explanation of launch problems and ordered setup guidance."
+    ]
+  ],
+  "prompt": "Use Digital Twin Universe to plan an isolated test environment for this project. Read amplifier-digital-twin-universe --help, check the host, and propose a profile. Show me the profile and lifecycle steps before launching.",
+  "install": "uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe\namplifier-digital-twin-universe --help",
+  "prerequisites": "Python 3.12+ and uv. Incus runs the environments; Docker supports profiles with mock service sidecars. The setup guide covers host preparation.",
+  "model_note": "Profile authoring, setup planning, diagnosis, and natural-language management use your configured model provider. Explicit lifecycle commands run without a model.",
+  "guide": "src/amplifier_digital_twin_universe/SMART_TOOL.md",
+  "related": [
+    "smart-tool-creator",
+    "possibly"
+  ]
+}
