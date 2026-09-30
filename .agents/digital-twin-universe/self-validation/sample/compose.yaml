@@ -1,0 +1,19 @@
+# The universe the installed digital-twin-universe launches, inside the twin: a web server the host's browser can reach.
+# A universe inside a universe is one more Compose project on the inner daemon; the host never sees it.
+name: sample
+
+x-dtu:
+  description: A page served from inside the inner universe, chained out to the host
+  twin_machine: web
+
+services:
+  web:
+    image: python:3.12-alpine
+    user: "1000:1000"
+    command: sh -c "mkdir -p /tmp/site && echo hello-from-the-inner-universe > /tmp/site/index.html && cd /tmp/site && python3 -m http.server 8080"
+    # 8080 inside the twin; the outer profile publishes the twin's 8080 as 18080 on the host.
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/')"]
+      interval: 2s

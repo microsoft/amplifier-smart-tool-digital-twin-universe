@@ -1,0 +1,39 @@
+# Digital Twin Universe, held to its own standard: installed and run inside a universe, as a user would, not on the machine
+# it was developed on. See "Validating Digital Twin Universe with itself" in docs/00-vision.md.
+#
+#   digital-twin-universe launch --profile self-validation
+#   digital-twin-universe exec --id <id> --command 'digital-twin-universe check'
+#   digital-twin-universe exec --id <id> --command 'digital-twin-universe launch --profile sample'
+#
+# The twin installs this checkout from its GitHub URL, working tree included, then runs a Docker daemon of its
+# own, so every universe it launches lives inside it: the host sees one privileged container and nothing else.
+name: self-validation
+
+x-dtu:
+  description: This checkout installed as if released, driving its own universes on a nested Docker daemon
+  twin_machine: twin
+  repositories:
+    # The repository this profile lives in, three directories up.
+    - path: ../../..
+      url: https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
+
+services:
+  twin:
+    build: .
+    # A nested daemon has no unprivileged path. This weakens the container boundary, and is this profile's
+    # decision to make: the twin runs only what this checkout does.
+    privileged: true
+    # The daemon on its socket alone. Left to itself the image also listens on TCP and delays startup to warn
+    # about that; nothing but the twin talks to this daemon.
+    command: [dockerd, --host=unix:///var/run/docker.sock]
+    # The inner daemon starts with an empty image cache, so the sample pulls its one image on each launch.
+    # `destroy` removes a universe's volumes with it, so a cache would have to be an `external` volume made by
+    # hand; a ten second pull is cheaper than a step to forget.
+    # The inner sample profile publishes 8080 inside the twin; this carries it out to the host.
+    # Set DTU_SELF_VALIDATION_PORT to put it somewhere else on the host.
+    ports:
+      - "${DTU_SELF_VALIDATION_PORT:-18080}:8080"
+    healthcheck:
+      test: [CMD, docker, info]
+      interval: 3s
+      start_period: 60s

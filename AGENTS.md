@@ -1,56 +1,65 @@
-# Agent Conventions
+This is a Smart Tool that must conform to Microsoft's [Amplifier Smart Tool Spec](https://github.com/microsoft/amplifier-smart-tools).
 
-## Highest authority
+## Orientation
 
-[docs/00-vision.md](docs/00-vision.md) is the highest-authority document in
-this repository. When a change conflicts with it, the vision wins; raise the
-conflict rather than silently overriding it.
+- If not already, set up the environment by following docs/DEVELOPMENT.md. It also has every command for linting, formatting, type checking, testing, and running the conformance kit.
+- After making changes, `prek run --all-files` and `uv run pytest` must pass before the work is done.
+- `docs/00-vision.md` is the source of truth for what this tool is and is not, and `docs/01-library.md` for what it exposes. Then `README.md` and `docs/DEVELOPMENT.md`, then the rest of `docs/`. Both are written for people and stay concise. When work changes any of them, propose the doc updates at the end and call out contradictions.
+- The library is the tool. Every capability lives in the library and is reachable from `lib.py`. The CLI and any other surface are thin wrappers: argument parsing and I/O conventions, then a call into the library. Capability that exists only in a wrapper is a defect.
+- Each domain capability lives in `capabilities/<name>/`, with its prompts and templates beside its code. `lib.py` imports it and is the only place that does. `core/` holds only what every smart tool has: the manifest and the skill.
+- Deterministic capabilities run with no model provider configured. Model-backed capabilities go through the `Intelligence` interface, never an SDK directly, and their help text says they are model-backed. They run through the agent provider `agent_provider` names, or the first installed, and default to that agent provider's model in `DEFAULT_INTELLIGENCE_MODELS` and `DEFAULT_INTELLIGENCE_REASONING_EFFORT` from `schemas.py`, exposing all three as parameters; never hardcode a model name.
+- Failures name what went wrong and how to fix it. The caller is usually an agent.
+- Once this tool has a remote, declare it in `pyproject.toml` under `[project.urls]` as `Repository = "<url>"`. `--help` then carries it, so an agent that can run the tool but not read its files still finds the docs.
+- Never modify this file unless explictly told.
 
-## The library is the tool
+## Writing Style
 
-Every capability lives in `amplifier_digital_twin_universe`. No capability
-may exist only in the CLI (`cli.py`, `catalog.py`). Add a new capability to
-the library first, export it from `__init__.py`, then wire the CLI to it.
+- Be concise. The user will not read walls of text.
+- When adding to existing documents, add only what's needed.
+- Do not restructure or rewrite existing content unless asked.
+- Always prefer code blocks and other formatting over tables.
+- Match the tone and density of what's already in the file.
+- Never write em dashes
 
-## The profile schema is not ours
+## Python Development Instructions
 
-The DTU profile schema, its loader, and its launch semantics are owned by
-`amplifier_bundle_digital_twin_universe`. `profiles.py` and `environments.py`
-delegate to it. Never reimplement or partially re-parse the schema here; a
-second answer to a question the engine already answers is exactly how
-`validate-profile` and `launch` drift apart.
+- This is a production-grade Python project using `uv` as the package and project manager. You must *always* follow best Python practices.
+  - To figure out how `uv` works, start by using `uv --help`.
+- Make sure any comments in code are necessary. A necessary comment captures intent that cannot be encoded in names, types, or structure. Comments should be reserved for the "why", only used to record rationale, trade-offs, links to specs/papers, or non-obvious domain insights. They should add signal that code cannot.
+- The current code in the package should be treated as an example of high quality code. Make sure to follow its style and tackle issues in similar ways where appropriate.
+- Don't generate characters that a user could not type on a standard keyboard like fancy arrows (layout trees are fine)
+- Anything is possible. Do not blame external factors after something doesn't work on the first try. Instead, investigate and test assumptions through debugging through first principles.
+- `ty` by Astral is used for type checking. Always add appropriate type hints such that the code would pass ty's type check.
+- Follow the Google Python Style Guide.
+- NEVER add imports to __init__.py files. Leave them empty unless absolutely necessary.
+- Always prefer pathlib for dealing with files. Use `Path.open` instead of `open`.
+- When using pathlib, **always** Use `.parents[i]` syntax to go up directories instead of using `.parent` multiple times.
+- When writing tests, use pytest and pytest-asyncio.
+- Prefer using loguru for logging instead of the built-in logging module. Do not add logging unless requested.
+- NEVER use `# type: ignore`. It is better to leave the issue and have the user work with you to fix it.
+- Don't put types in quotes unless it is absolutely necessary to avoid circular imports and forward references.
+- When adding new dependencies, you **must** use `uv add <package>`. AFTER that, update the `pyproject.toml` to follow the convention for versions like the other dependencies.
+- To learn about how packages work, you should read from the relevant source code. This is especially important when determining which types to use.
+- Run `prek run --all-files` when you are done with code changes and fix everything it reports; it runs the lock, lint, format, and type checks.
+- NEVER add a bare `*,` keyword-only marker to a function signature. Write plain positional-or-keyword parameters and call them by keyword.
 
-## Changes to environments.py need a live host
+## Key Files
 
-`environments.py` wraps real Incus lifecycle calls. Unit tests with mocks are
-not sufficient evidence that a change works. Any change here needs a real
-`launch` against a live Incus host, exercised through at least `launch`,
-`run`, `check-readiness`, and `destroy`, before it is considered verified.
+@docs/DEVELOPMENT.md
+@docs/00-vision.md
 
-## Model-backed paths never degrade
+## References
 
-`create_profile`, `plan_install`, `diagnose`, and `manage` are model-backed.
-When no model provider is configured, they raise `NoProviderError` naming
-the remedy. They must never fall back to a deterministic approximation and
-return it as if it were the real answer; a lesser result returned silently
-is a caller misled about what it received.
+`reference/` holds the repositories to read rather than recall while developing this tool.
+They are shallow clones of the main branch only, always gitignored, and never discovered by tests, formatters, or type checks.
+`uv run setup-for-dev.py` clones any that are missing, so a fresh clone of this repository recovers them.
+The repositories are (add to the list as more are needed, the one exception to modifying this file):
 
-## Manifest and package version move together
-
-`version` frontmatter in `SMART_TOOL.md` and `version` in
-`pyproject.toml` describe the same release. Bumping one without the other
-leaves `load_manifest()` reporting a version the package does not match.
-Change both in the same commit.
-
-## Writing style for durable output
-
-Applies to docs, docstrings, comments, and error messages:
-
-- No em dashes.
-- Prefer code blocks over tables; no tables.
-- No status language: no "currently", "for now", "not yet", "coming soon",
-  "TODO", "planned". Write the finished version. Unbuilt ideas go only in
-  [docs/ROADMAP.md](docs/ROADMAP.md).
-- Never describe the format inside an instance of the format.
-- Be concise and dense. Do not pad.
-- Declarative, present tense, third person.
+- https://github.com/microsoft/amplifier-smart-tools
+- https://github.com/github/copilot-sdk
+- https://github.com/microsoft/amplifier-agent
+- https://github.com/agentskills/agentskills
+- https://github.com/docker/docs
+- https://github.com/DavidKoleczek/mybench-smart-tool
+- https://github.com/Microsoft/amplifier-smart-tool-creator
+- https://github.com/gabrieldemarmiesse/python-on-whales

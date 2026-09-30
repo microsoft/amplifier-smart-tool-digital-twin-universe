@@ -1,0 +1,29 @@
+# A web app reached from the host's browser, with its URLs named: what `x-dtu.urls` is for.
+# The site listens on 8000 in the twin; `ports` publishes that on the host, and the two entries below become
+# the URLs `launch` reports, so a person or an agent is handed http://web-site.localhost:<port>/docs/ rather than
+# a bare port to guess a path on.
+#
+#   digital-twin-universe launch --profile web-site
+#   digital-twin-universe launch --profile web-site      # again: a second universe on the same profile needs its own port
+#   DTU_WEB_SITE_PORT=9001 digital-twin-universe launch --profile web-site
+name: web-site
+
+x-dtu:
+  description: A static site with two named URLs, opened from the host's browser
+  urls:
+    # `port` is the container port. The host port comes from `ports` at launch, so it is never written here.
+    # `host` under .localhost resolves to loopback in Chrome, Edge, Firefox, and curl on every OS with no setup;
+    # Safari and non-browser clients on macOS and Windows need a hosts entry. See docs/03-profile.md.
+    - {port: 8000, host: web-site.localhost, label: Home}
+    - {port: 8000, host: web-site.localhost, path: /docs/, label: Docs}
+
+services:
+  twin:
+    build: .
+    command: python -m http.server 8000
+    ports:
+      - "${DTU_WEB_SITE_PORT:-8410}:8000"
+    # http.server binds IPv4 only, and Alpine resolves `localhost` to ::1 first, so probe the address.
+    healthcheck:
+      test: [CMD, wget, -q, -O-, "http://127.0.0.1:8000/"]
+      interval: 2s

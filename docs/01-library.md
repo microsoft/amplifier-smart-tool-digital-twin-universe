@@ -1,444 +1,350 @@
 # Library Reference
 
-Every capability of Digital Twin Universe is reachable from the
-`amplifier_digital_twin_universe` library. The CLI and any other surface are
-thin wrappers over it and add no capability of their own.
+Every capability of Digital Twin Universe is reachable from `digital_twin_universe.lib`.
+All other surfaces, including the CLI, are thin wrappers over the library and add no capability of their own.
 
-## load_manifest
+Each capability has a section: what it does, its signature, and what it raises.
+Result shapes are the classes in `digital_twin_universe/schemas.py`; this page names them and explains only what a field name cannot.
+The sections `Failures`, `Profiles`, and `Universe` define what the capabilities share.
 
-Reads the manifest shipped inside the installed package (`SMART_TOOL.md`) and
-returns it as structured data. Deterministic. Requires no model provider.
+## Docker access
 
-```python
-def load_manifest() -> Manifest
-```
+Universe operations and host checks go through [python-on-whales](https://github.com/gabrieldemarmiesse/python-on-whales), which drives the `docker` CLI and its Compose plugin from Python with typed results.
+It is the only maintained Python route to `docker compose`; the official `docker` SDK speaks the Engine API and has no Compose support, and Compose is what a universe is.
+The trade is that the Docker CLI must be on `PATH`, which Docker Desktop and Docker Engine both provide and `check` confirms.
+`execute` and `shell` take the `docker compose ... exec` command python-on-whales builds and run it through `subprocess`, since that is where a timeout, the exit code, and the caller's terminal are.
+File transfers use `docker cp` rather than `docker compose cp`, which fails on whole directories.
+`install` is the exception: it runs documented host-shell commands, not Docker.
 
-- Returns a `Manifest` with `smart_tool_format`, `name`, `version`,
-  `description`, `use_cases`, `platforms`, `requires` (a list of
-  `Requirement`, each with `name`, `purpose`, `install`, `optional`), and
-  `body`, the Markdown below the frontmatter.
+## Failures
 
-## skill
-
-Renders the tool's skill: the manifest body under a heading carrying the tool's
-name, a generated line per capability pointing at its own `--help`, and the
-files the body refers to. This is what the CLI prints for `--help`.
-Deterministic. Requires no model provider.
+Every failure the library can name is one exception:
 
 ```python
-def skill() -> str
+class DigitalTwinUniverseError(Exception):
+    code: str  # stable slug to branch on, such as "port-in-use"
+    message: str  # what went wrong, with the specifics: the service, the port, the variable
+    remedy: str  # what to do about it
 ```
 
-The pieces it is built from are in `amplifier_digital_twin_universe.catalog`:
-`skill_directory()` (the installed package root), `repository()` (the source
-URL from the package metadata, or `None`), `skill_resources()` (paths relative
-to the skill directory), and `CAPABILITIES` (one record per capability, each
-with `name`, `kind`, and `summary`).
+`str(error)` is the message followed by the remedy, which is what the CLI prints. Each capability lists the codes it raises. Anything else that escapes is a bug.
 
-## probe
+A result that carries a verdict (`HostReport.ok`, `ProfileReport.ok`, `InstallReport.outcome`) is never raised as an error when the verdict is negative. The verdict is the answer.
 
-Measures this host against the manifest's declared requirements. Deterministic
-and read-only: nothing here installs, configures, or starts anything.
+## Check
+
+Whether this host can run a universe: the Docker CLI on `PATH`, a daemon answering behind it, and the Compose plugin.
+Deterministic; needs no model provider.
 
 ```python
-def probe() -> HostReport
+def check() -> HostReport
 ```
 
-- Returns a `HostReport` with `platform`, `supported`, `ready` (every required
-  prerequisite present), `can_launch` (the container runtime is installed and
-  answers), `prerequisites` (list of `Prerequisite`), `model_providers` (list
-  of provider names whose credentials resolve), `environments` (count, or
-  `None` when `can_launch` is false), and `notes`.
+`HostReport.prerequisites` is in probe order and stops at the first one missing; each missing one carries a `remedy`, which names `digital-twin-universe install`.
 
-## validate_profile
+## Install
 
-Checks whether a profile document is launchable, by delegating to the DTU
-engine's own loader so a profile that validates here parses identically at
-launch. Deterministic. Requires no model provider.
+Get Docker working on this host. Model-backed, except that when `check()` already passes it returns `ready` without loading the intelligence or touching the network.
 
 ```python
-def validate_profile(
-    yaml_text: str,
-    variables: dict[str, str] | None = None,
-    base_dir: Path | str | None = None,
-) -> ValidationReport
+def install(
+    apply: bool = False,            # run the unattended steps; otherwise only plan
+    accept_license: bool = False,   # allow --accept-license in Docker Desktop's installer
+    agent_provider: AgentProvider | None = None,  # copilot or amplifier-agent; the first installed when None
+    model: str | None = None,       # the agent provider's default in DEFAULT_INTELLIGENCE_MODELS when None
+    reasoning_effort: ReasoningEffort = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
+    timeout_seconds: int = 1200,    # the whole run; Desktop downloads are large and daemon start is polled
+    intelligence: Intelligence | None = None,
+) -> InstallReport
 ```
 
-- `yaml_text`: the profile document.
-- `variables`: values substituted for `${NAME}` references.
-- `base_dir`: the directory relative `provision.files` sources resolve
-  against. Without it, relative sources resolve against the process cwd.
-- Returns a `ValidationReport` with `valid`, `name`, `description`, `errors`,
-  `warnings` (the loader drops unknown fields silently, so a warning here is a
-  profile that would launch and do the wrong thing), and
-  `unresolved_variables`.
+Host facts are gathered deterministically, the official Docker pages for this platform and distribution are fetched as Markdown at run time, and the agent, given no tools, turns both into one `InstallPlan`: ordered steps, each with its commands, the page it came from, and whether it can run unattended.
+The tool checks the plan before showing it: every step cites a supplied page, `--accept-license` appears only with `accept_license`, and no unattended step uses `sudo` without `-n`, a convenience script, or anything that needs a new login or a restart.
 
-## launch
+Without `apply`, the plan is the result and is saved at `~/.digital-twin-universe/install/plan.json` with a hash of the facts and the agent provider it was made through. `apply=True` reuses it while the facts still match, so what runs is what was shown and the two calls cost one model call. It then runs the unattended steps in order with stdin closed, stops at the first manual step, and on a failing step resumes the same agent session once for replacement steps. A plan made through another agent provider is still reused, but its session is not, so a failing step ends the run without a repair round.
+When `check()` passes afterwards, it launches the shipped `hello` example, runs a command in it, and destroys it, and only then reports `installed`.
 
-Stands up one environment from a profile and returns how to reach it.
-Deterministic. Requires `incus`. Blocks until provisioning finishes, which is
-minutes for a profile that installs a toolchain.
-
-```python
-def launch(
-    profile: str | Path,
-    *,
-    variables: dict[str, str] | None = None,
-    name: str | None = None,
-    hostname: str | None = None,
-    max_environments: int | None = None,
-) -> dict[str, Any]
+```
+ready            Docker was already usable; nothing was done
+planned          no apply; the steps are the plan
+installed        apply; check() passes and a universe ran
+action-required  apply; the unattended steps ran, a manual one remains
+failed           apply; a step failed after the repair round, or the universe did not run
 ```
 
-- `profile`: path to a profile document.
-- `variables`: values substituted for `${NAME}` references at launch.
-- `name`: name the environment instead of generating one.
-- `hostname`: register `NAME.local` for the environment over mDNS.
-- `max_environments`: ceiling on concurrent environments. Precedence is this
-  argument, then `AMPLIFIER_DTU_MAX_ENVIRONMENTS`, then the default of 15.
-  Zero removes the ceiling.
-- Returns `id`, `name`, `profile`, `status`, `created_at`, and, when the
-  profile declares them, `access`, `container_ip`, and `mock_services`.
+Every step in `InstallReport.steps` keeps its status and, when it failed, the last lines of its output in `reason`. `next` is exactly one instruction for the person. `notes` carries what the plan wants said: license terms, deviations from the docs such as `-y`, the docker group's privileges.
 
-## run
+Raises `docs-unreachable` (with the pages to read by hand), `plan-rejected`, `install-timeout` (with the report so far), `no-agent-provider` and `agent-provider-not-installed` (with the command that installs one), and the intelligence preflight codes: `gh-missing` and `gh-not-signed-in` for `copilot`, `model-invalid` and `amplifier-agent-unavailable` for `amplifier-agent`.
 
-Runs one command inside an environment under a login shell and captures what
-it produced. Deterministic. Requires `incus`.
+## Create profile
 
-```python
-def run(
-    environment_id: str,
-    command: list[str],
-    *,
-    timeout: int | None = DEFAULT_EXEC_TIMEOUT_SECONDS,
-) -> dict[str, Any]
-```
-
-- `environment_id`: the environment's id, as reported by `list_environments`.
-- `command`: argv to run. Must not be empty.
-- `timeout`: seconds to allow, or `None` for no timeout. `DEFAULT_EXEC_TIMEOUT_SECONDS` is 600.
-- Returns `id`, `command`, `exit_code`, `stdout`, `stderr`. A non-zero
-  `exit_code` is a result, not a failure of this call.
-
-## status
-
-Reports one environment's state, profile, creation time, and access URLs.
-Deterministic. Requires `incus`.
-
-```python
-def status(environment_id: str) -> dict[str, Any]
-```
-
-- `environment_id`: the environment's id.
-- Returns `id`, `profile`, `status`, `created_at`, and, when applicable,
-  `hostname` and `access`.
-
-## list_environments
-
-Lists every environment this tool manages on this host. Deterministic.
-Requires `incus`. Scoped to the machine, not to a session: an environment
-another session launched appears here too.
-
-```python
-def list_environments() -> list[dict[str, Any]]
-```
-
-- Returns a list of environments, each shaped like `status`'s result.
-
-## check_readiness
-
-Evaluates an environment's readiness checks once. Deterministic. Requires
-`incus`. Blocks for as long as the profile's access-port verification budget
-allows.
-
-```python
-def check_readiness(environment_id: str, *, skip_access_check: bool = False) -> dict[str, Any]
-```
-
-- `environment_id`: the environment's id.
-- `skip_access_check`: evaluate only the in-environment checks, not host-side
-  port reachability.
-- Returns `ready` (`true`, `false`, or `null` when the profile declares no
-  checks, which is not the same as failing them), `message`, and, when
-  applicable, `checks` and `access`.
-
-## update
-
-Re-runs a running environment's update commands in place, from the profile
-snapshot taken at launch rather than the host copy. Deterministic. Requires
-`incus`.
-
-```python
-def update(
-    environment_id: str,
-    *,
-    variables: dict[str, str] | None = None,
-    skip_readiness: bool = False,
-) -> dict[str, Any]
-```
-
-- `environment_id`: the environment's id.
-- `variables`: values substituted for `${NAME}` references in the update
-  commands.
-- `skip_readiness`: do not re-run readiness checks afterward.
-- Returns `id`, `profile`, `status`, `pypi_refreshed`, `cmds_run`, and, unless
-  skipped, `readiness`.
-
-## push_files
-
-Copies host paths into an environment. Deterministic. Requires `incus`. A
-directory source is walked whether or not `recursive` is set, and keeps its
-own name under the destination, as `cp -r` does.
-
-```python
-def push_files(
-    environment_id: str,
-    sources: list[str],
-    destination: str,
-    *,
-    recursive: bool = False,
-    create_dirs: bool = True,
-    mode: str | None = None,
-    uid: int | None = None,
-    gid: int | None = None,
-    timeout: int = DEFAULT_FILE_TIMEOUT_SECONDS,
-) -> dict[str, Any]
-```
-
-- `sources`: host paths to copy. Must not be empty.
-- `destination`: path inside the environment.
-- `recursive`: copy directories and their contents.
-- `create_dirs`: create missing parent directories at the destination.
-- `mode`, `uid`, `gid`: permission bits and ownership to set inside the
-  environment.
-- `timeout`: seconds allowed per underlying transfer, not the whole tree.
-  `DEFAULT_FILE_TIMEOUT_SECONDS` is 120.
-- Returns `id`, `sources`, `destination`, `transferred`.
-
-## pull_files
-
-Copies environment paths out to the host. Deterministic. Requires `incus`.
-Environments are ephemeral, so anything worth keeping leaves this way before
-`destroy`.
-
-```python
-def pull_files(
-    environment_id: str,
-    sources: list[str],
-    destination: str,
-    *,
-    recursive: bool = False,
-    create_dirs: bool = True,
-    timeout: int = DEFAULT_FILE_TIMEOUT_SECONDS,
-) -> dict[str, Any]
-```
-
-- `sources`: environment paths to copy. Must not be empty.
-- `destination`: host path to write to.
-- `recursive`: copy directories and their contents.
-- `create_dirs`: create missing parent directories on the host.
-- `timeout`: seconds allowed per underlying transfer.
-- Returns `id`, `sources`, `destination`, `transferred`.
-
-## destroy
-
-Tears down an environment and everything launched beside it: stops mock
-sidecars, releases the mDNS hostname, and deletes the container. Nothing
-inside survives. Deterministic. Requires `incus`.
-
-```python
-def destroy(environment_id: str) -> dict[str, Any]
-```
-
-- `environment_id`: the environment's id.
-- Returns `id`, `destroyed`.
-
-## create_profile
-
-**Model-backed.** Consumes tokens and may return a different answer on a
-second run. Fails rather than degrades when no model provider is configured.
-
-Drafts a launchable DTU profile from a description of what to test. Every
-draft is run through the engine's own loader and repaired against its
-findings until it parses cleanly or the attempt budget is spent.
+From "I want a universe for X" to a profile at `.agents/digital-twin-universe/<name>/` that has been launched and exercised, not just written. Model-backed; needs Docker.
 
 ```python
 def create_profile(
-    description: str,
-    *,
-    context: str | None = None,
-    variables: dict[str, str] | None = None,
-    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
-    provider: str | None = None,
-    model: str | None = None,
+    description: str,                        # what the universe is for, in the user's words
+    project: Path | None = None,             # the repository to profile; None means the description is everything
+    name: str | None = None,                 # profile name; derived from the description when None
+    verify: bool = True,                     # agent and tool both launch and run the checks; False stops both at validate-profile
+    keep: bool = False,                      # leave the tool's verified universe running and report it; needs verify
+    overwrite: bool = False,                 # replace an existing <name>/
+    max_attempts: int = 3,                   # submissions the tool will consider; the agent iterates within each
+    agent_provider: AgentProvider | None = None,  # copilot or amplifier-agent; the first installed when None
+    model: str | None = None,                # the agent provider's default in DEFAULT_INTELLIGENCE_MODELS when None
+    reasoning_effort: ReasoningEffort = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
+    timeout_seconds: int = 1800,             # the whole run; a launch with builds is minutes
     intelligence: Intelligence | None = None,
-) -> ProfileDraft
+) -> CreatedProfile
 ```
 
-- `description`: what to stand up and test. Must not be empty.
-- `context`: additional material the caller already holds, passed as data
-  rather than as a path.
-- `variables`: names that resolve at launch and may be referenced as
-  `${NAME}` in the drafted profile.
-- `max_attempts`: draft-and-repair budget. `DEFAULT_MAX_ATTEMPTS` is 3.
-- `provider`, `model`: override the model provider and model to use.
-- `intelligence`: an `Intelligence` implementation to use instead of the
-  shipped default.
-- Returns a `ProfileDraft` with `yaml_text`, `name`, `description`,
-  `attempts`, `warnings`, `unresolved_variables`, and usage
-  (`provider`, `model`, `tokens_in`, `tokens_out`, `cost_usd`). Raises
-  `GenerationFailedError` when no draft parses cleanly within the budget.
+The agent has tools and the tool has the verdict. The agent works in the project root (the git root above `project`, or `project` itself, or the working directory without one) with tools to read, search, and write files and run commands, reading the repository and a local clone of Docker's documentation, and writing only into `<name>.draft/` beside where the profile will land. It must validate, launch, run every check in the twin, and destroy on its own before submitting, and the submission is accepted only when it carries the id of a universe the tool saw appear during the run and a passed result for every check; anything less is sent back once as a correction, then `profile-rejected`. The tool then validates, launches, reruns the same checks through `execute`, and destroys. Only a draft that passes for the tool is renamed to `<name>/`.
 
-## plan_install
+After the tool's verdict, one more turn in the same session asks the agent to clean up: destroy anything it launched that is still listed, remove scratch it made outside the draft, and take out of the profile anything that was there only for iteration. When that edits the profile, or the draft's files differ afterwards whatever the agent said, the tool validates and launches once more before promoting.
 
-**Model-backed.** Consumes tokens and may return a different answer on a
-second run. Fails rather than degrades when no model provider is configured.
+```
+created      the agent launched and checked, the tool launched and checked, cleanup ran; <name>/ exists
+validated    verify=False; validate-profile has no errors; <name>/ exists
+failed       attempts exhausted, or a variable the profile rightly demands is unset; <name>.draft/ holds the last attempt
+```
 
-Produces ordered install steps for this host. The host evidence the plan is
-built from is gathered deterministically and returned alongside it. Proposes
-only: nothing is installed, configured, or started.
+`CreatedProfile.checks` is the tool's own run, not the agent's. `env-missing` is never sent back to the agent as a defect: the profile is right to demand the variable, so the run ends `failed` with `next` saying what to export. `keep=True` leaves the tool's verified universe running with its `universe_id` and `urls` in the result and its record pointed at `<name>/`; when cleanup changed the profile, the universe launched from the cleaned profile is the one kept.
+
+The tool destroys only universes it launched itself. Universes the agent launched are the agent's to destroy, in the authoring turns and again in the cleanup turn. A universe whose record's `profile_path` is under the draft can only have come from this run, so any such universe still listed at the end goes into `notes` with its id and `next` names its `destroy` command; the tool does not sweep it, since a sweep by name would take down a universe someone else launched from a profile of the same name.
+
+The documentation the agent reads is kept at `~/.digital-twin-universe/reference/`: a sparse, shallow clone of `docker/docs` holding the Compose file reference, the Compose manual, and the build manual, plus the Dockerfile reference fetched from BuildKit, refreshed when older than seven days. Without `git` or without network the reference is reported absent in `notes` and the run goes on.
+
+Raises `profile-exists`, `project-not-found`, `name-invalid`, `keep-needs-verify`, `docker-unavailable`, `profile-rejected` (the agent's submission was unusable after the correction round), `create-timeout` (with the report so far), and the intelligence preflight codes. A failed verification is an outcome, not an exception.
+
+## Profiles
+
+A profile is a Compose file with an `x-dtu` block; [the profile reference](03-profile.md) is the schema.
+Every `profile` argument in this library accepts the same three forms:
+
+- A name, such as `copilot-cli`: the directory `.agents/digital-twin-universe/copilot-cli/`, searched for from the working directory upward to the git root.
+- A path to a Compose file.
+- A path to a directory, which must hold `compose.yaml` or `docker-compose.yaml`.
+
+When a name is not found in the project, it is looked for under the examples shipped inside the package, so `copilot-cli` launches on a fresh install with nothing copied. The name form never accepts a path separator.
+Whatever the form, the result is the entry point: a Compose file.
+When nothing is found, the capability raises `profile-not-found`, saying what it looked for and where.
+
+## Examples
+
+`examples/` in the installed package holds profiles that are complete and known to launch. Each is a directory under the examples root, in the same shape as `.agents/digital-twin-universe/<name>/`, and the skill lists its `compose.yaml` under `<skill_resources>` so an agent reading `--help` can open it and find the `Dockerfile` and anything else it names beside it.
+
+```
+examples/
+  hello/                The smallest universe: an Alpine twin with nothing installed
+  copilot-cli/          GitHub Copilot CLI installed as a user would, signed in with the host's GH_TOKEN
+  served-repository/    A local git repository cloned in the twin from the URL it stands in for
+  web-site/             A static site opened from the host's browser at the URLs `x-dtu.urls` names
+```
+
+The examples root is `skill_directory() / "examples"`.
+
+## Validate profile
+
+Whether a profile can be launched, and what would be unrealistic about it if it were.
+Deterministic. Needs the Docker CLI for `docker compose config`, which does the Compose-side validation.
 
 ```python
-def plan_install(
-    *,
-    goal: str | None = None,
-    context: str | None = None,
-    host: HostReport | None = None,
-    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
-    provider: str | None = None,
-    model: str | None = None,
-    intelligence: Intelligence | None = None,
-) -> InstallPlan
+def validate_profile(profile: str | Path) -> ProfileReport
 ```
 
-- `goal`: narrows the plan to what a particular use needs.
-- `context`: additional material the caller already holds.
-- `host`: a `HostReport` to plan against instead of probing this host again.
-- `max_attempts`, `provider`, `model`, `intelligence`: as in `create_profile`.
-- Returns an `InstallPlan` with `ready`, `summary`, `steps` (each an
-  `InstallStep` with `title`, `why`, `commands`, `verify`), `notes`, `host`
-  (the `HostReport` the plan was built from), and `usage`.
+Checks run in this order and every problem is reported, not only the first:
 
-## diagnose
+1. Profile resolution.
+2. `docker compose config`, with the host's environment. This is Compose's own validation, and it also resolves interpolation, so an unset `${GH_TOKEN:?message}` surfaces here with its message.
+3. `x-dtu` against its schema.
+4. The universe invariants (errors) and realism checks (warnings) listed in the profile reference.
 
-**Model-backed.** Consumes tokens and may return a different answer on a
-second run. Fails rather than degrades when no model provider is configured.
+`ProfileReport.ok` is "no errors"; warnings do not affect it. Each `Finding` carries a stable `code`, a `location` in the file such as `services.copilot.volumes[0]`, the message, and a remedy.
 
-Explains what is wrong with this host or one environment, and how to fix it.
-Evidence is measured before the model sees anything and returned with the
-diagnosis so the reading can be checked against it. Repairs nothing.
+Raises `profile-not-found` and `docker-unavailable`.
+
+## Universe
+
+A universe is one Compose project. Its `id` is the project's name, `dtu-<profile name>-<4 hex>`, so `docker compose -p <id> logs` reaches the same stack by hand and `list` can tell two launches of one profile apart.
+
+What the tool renders for a universe lives in its state directory, `~/.digital-twin-universe/universes/<id>/`: `dtu.yaml`, the overlay, `overlay/`, the files it refers to, including the certificate authority the gateway minted, and `universe.json`, the record: id, name, description, profile path, twin, and creation time. Everything else about a universe is in Docker.
+
+A profile that serves nothing and rewrites nothing renders no overlay at all, so `dtu.yaml` is absent and the universe is exactly the profile.
+The record is how an id leads back to a universe: every capability that takes an `id` reads it first and raises `universe-not-found` when it is missing. A stack whose directory was deleted by hand is no longer a universe to the tool; `docker compose -p <id> down --volumes` clears it.
+
+Every capability that acts on a universe returns a `Universe`: the record above, plus `state`, its `services` as Compose reports them (state, health, image), and `urls`, the twin's published ports as the host reaches them: `http://localhost:<host port>/` for each, or the host, path, and label `x-dtu.urls` gives that container port. The entries are kept in the record, so `status` and `list` report them without rereading the profile. A `host` other than `localhost` is reported as written; whether it resolves is the client's business, and the profile reference says which clients honor `*.localhost`.
+
+`state` is `running` when every service is up and healthy, `starting` while any is still becoming healthy, `degraded` when any has exited or is unhealthy, and `stopped` when none is running.
+
+## Launch
+
+From a profile to a running, ready universe, in one call.
 
 ```python
-def diagnose(
-    symptom: str | None = None,
-    *,
-    environment_id: str | None = None,
-    context: str | None = None,
-    evidence: dict[str, Any] | None = None,
-    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
-    provider: str | None = None,
-    model: str | None = None,
-    intelligence: Intelligence | None = None,
-) -> Diagnosis
+def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe
 ```
 
-- `symptom`: what the caller observed, in their own words. Without it the
-  diagnosis covers whatever the evidence itself shows.
-- `environment_id`: measure this environment as well as the host.
-- `context`: additional material the caller already holds.
-- `evidence`: pre-gathered evidence to diagnose instead of calling
-  `gather_evidence` again.
-- `max_attempts`, `provider`, `model`, `intelligence`: as in `create_profile`.
-- Returns a `Diagnosis` with `summary`, `findings` (each a `Finding` with
-  `issue`, `cause`, `confidence`, `remedy`, `commands`), `evidence`, `usage`.
+Validates the profile and stops on any error, before anything is recorded or started. Assigns an id, renders the overlay, then brings the stack up in the order it needs: the `git` and `gateway` services first when the profile calls for them, then the certificate authority is taken out to the host, then everything else, building with the gateway reachable. Returns when every healthcheck passes.
+That is `docker compose -p <id> -f <profile> -f <overlay> up --build --wait`, once per pass; Compose's progress is passed through to stderr.
 
-`gather_evidence(environment_id=None, *, host=None) -> dict[str, Any]` is the
-deterministic probe `diagnose` runs first; a failed probe is recorded as
-evidence rather than raised.
+When something fails after containers have started, they are left running so `doctor` and `docker compose logs` have something to read. `destroy` clears them; every failure's remedy names the command.
 
-## manage
+Raises:
 
-**Model-backed.** Consumes tokens and may return a different answer on a
-second run. Fails rather than degrades when no model provider is configured.
+- `profile-not-found`, `profile-invalid` (the report's errors), `docker-unavailable`
+- `env-missing`: the variable, and the message the profile gave it
+- `port-in-use`: the port, and who holds it when Docker says
+- `build-failed`: the service, and the last lines of build output
+- `unhealthy`: the service, its healthcheck, and the last lines of its logs
+- `timeout`: what was still starting when `timeout_seconds` ran out
+- `launch-failed`: anything else Compose refused, with the last lines of its output
 
-Turns a request in words into deterministic actions, and runs them when
-confirmed. The model chooses from a fixed registry of this tool's own
-deterministic capabilities (`ACTIONS`) and supplies their arguments; it
-cannot invent an action or run anything itself. Without `confirmed`, the plan
-comes back unrun and nothing changes. With `confirmed`, every step runs in
-order and execution stops at the first failure.
+## List
+
+Every universe launched from this machine, running or not, oldest first.
 
 ```python
-def manage(
-    request: str,
-    *,
-    confirmed: bool = False,
-    host: HostReport | None = None,
-    max_attempts: int = DEFAULT_MAX_ATTEMPTS,
-    provider: str | None = None,
-    model: str | None = None,
-    intelligence: Intelligence | None = None,
-) -> ManagePlan
+def list_universes() -> list[Universe]
 ```
 
-- `request`: what to do, in the caller's own words. Must not be empty.
-- `confirmed`: run the planned steps. Authorizes this invocation only; there
-  is no session-wide unlock and no environment variable that grants it.
-- `host`: a `HostReport` to plan against instead of probing this host again.
-- `max_attempts`, `provider`, `model`, `intelligence`: as in `create_profile`.
-- Returns a `ManagePlan` with `request`, `summary`, `steps` (each a
-  `PlannedStep` with `action`, `arguments`, `why`, `mutating`, `ran`, `ok`,
-  `result`, `error`), `mutating`, `confirmed`, `executed`, `complete`, `usage`.
+Every record in the state directory, each measured against Docker in one pass. A universe whose containers are gone appears as `stopped` with no services. An empty machine returns an empty list without touching Docker.
 
-## Failure
+Raises `docker-unavailable`.
 
-Every failure this tool raises deliberately is a `SmartToolError`, carrying a
-stable `.code` a caller can branch on and a `.remedy` a caller can act on.
+## Status
 
-- `MissingPrerequisiteError` (`missing_prerequisite`): something the manifest
-  declares under `requires` is absent.
-- `NoProviderError` (`no_provider`): a model-backed capability was invoked
-  with no model provider configured. Raised instead of falling back to a
-  deterministic answer.
-- `ProfileInvalidError` (`profile_invalid`): a profile failed to parse, so
-  nothing can be launched from it.
-- `ProfileNotFoundError` (`profile_not_found`): the named profile does not
-  resolve to a file on this host.
-- `EnvironmentNotFoundError` (`environment_not_found`): no environment on this
-  host carries the given id.
-- `EnvironmentLimitError` (`environment_limit`): launching would exceed the
-  concurrent environment ceiling.
-- `OperationFailedError` (`operation_failed`): an environment operation ran
-  and did not succeed.
-- `OperationTimedOutError` (`timed_out`): an environment operation exceeded
-  its time budget.
-- `GenerationFailedError` (`generation_failed`): the model did not produce a
-  usable answer within the attempt budget. Carries `.attempts`, the per-attempt
-  findings.
+One universe, measured now. `launch` returns the same measurement.
 
-## The model seam
+```python
+def status(id: str) -> Universe
+```
 
-Every model-backed capability runs through the `Intelligence` protocol:
+Raises `universe-not-found` and `docker-unavailable`.
+
+## Execute
+
+Run one command in the twin and get its `ExecResult`: exit code, stdout, stderr.
+
+```python
+def execute(
+    id: str,
+    command: str,
+    user: str | None = None,        # default: the twin's own user
+    workdir: str | None = None,     # default: the twin's own working directory
+    timeout_seconds: int = 300,
+) -> ExecResult
+```
+
+The command runs through a login shell (`sh -lc`), so `PATH` changes an installer made in `~/.profile` apply, the way they would in a person's terminal.
+A non-zero exit is a result, not a failure: `execute(id, "curl -sf localhost:8000/health")` returning `22` is the answer.
+
+Raises `universe-not-found`, `twin-not-running` (with the twin's state), `docker-unavailable`, and `timeout`. On `timeout` the command is abandoned, not killed; whatever it started is still running in the twin.
+
+## Shell
+
+An interactive shell in the twin, attached to the caller's terminal.
+
+```python
+def shell(id: str, user: str | None = None, workdir: str | None = None) -> int
+```
+
+Returns the shell's exit code when the person leaves it. The shell is `bash -l` when the image has bash, `sh -l` otherwise. In practice only the CLI calls this; it is in the library so the CLI adds nothing.
+
+Raises `universe-not-found`, `twin-not-running`, `docker-unavailable`, and `no-tty` when the caller has no terminal.
+
+## Push and pull files
+
+Copy between the host and the twin. `Transfer` says where the copy landed and how many files moved.
+
+```python
+def push_files(id: str, source: Path, destination: str) -> Transfer
+def pull_files(id: str, source: str, destination: Path) -> Transfer
+```
+
+Same rules as `docker cp`: when the destination is an existing directory the source is placed inside it under its own name, otherwise the source lands at the destination path itself, and the destination's parent must exist. A path in the twin is resolved against `/`, as `docker cp` does, not the twin's working directory.
+Pushed files end up owned by the twin's user. `docker cp` alone would leave them owned by `root`, which is a trap when the twin runs as a user.
+
+Raises `universe-not-found`, `twin-not-running`, `source-not-found` (the host path for a push, the twin path for a pull), `transfer-failed` (what `docker cp` refused, with its message), and `docker-unavailable`.
+
+## Destroy
+
+Remove a universe: every container, network, and volume, and its state directory. Built images stay, so the next `launch` of the same profile is fast. `Destroyed.removed` names what was taken down.
+
+Containers get one second after SIGTERM, not Compose's ten: the volumes go with them, so a graceful stop has nothing to preserve, and a process running as PID 1 (`sleep infinity`, `python -m http.server`) ignores the signal and would sit out the full grace period.
+
+```python
+def destroy(id: str) -> Destroyed
+```
+
+Raises `universe-not-found` and `docker-unavailable`.
+
+## Dashboard
+
+A web page for a person: every universe on this machine, its state, its URLs, and a destroy button, so nobody has to remember ids. Deterministic.
+
+```python
+def serve_dashboard(port: int | None = None, host: str = "127.0.0.1") -> Dashboard
+```
+
+Binds the port, starts serving from daemon threads, and returns at once with `Dashboard`: the `url` to open, the `mcp_url` of its MCP server, and `reachable`, which says whether that is only this machine or the local network. The server lives until the process exits; the CLI blocks for it. The default host keeps it off the network; pass `0.0.0.0` to expose it deliberately.
+
+The page is a minimal MCP Apps host that renders the view of the MCP server below, served on the same port at `/mcp` over streamable HTTP. A sandbox proxy for the view runs on a second, free port, since the MCP Apps spec puts the view on its own origin. Both are compiled assets shipped inside the package at `capabilities/dashboard/static/`, so running it needs nothing beyond the Python dependencies. The dashboard adds no capability; a capability it should show gets an MCP tool that calls it.
+
+Raises `port-in-use`, and `dashboard-not-compiled` when the view is missing from the package.
+
+## MCP server
+
+The universe tools and the dashboard view as an [MCP](https://modelcontextprotocol.io) server, a thin surface over the library like the CLI, in `digital_twin_universe.adapters.mcp`.
+
+```python
+def create_server(view: Path = VIEW_PATH) -> MCPServer
+```
+
+```
+open_dashboard(id?)     list_universes(), rendered as the dashboard view in hosts that support MCP Apps
+list_universes()        list_universes()
+universe_status(id)     status(id)
+destroy_universe(id)    destroy(id)
+```
+
+The view is `ui://digital-twin-universe/dashboard`, a single HTML file shipped at `adapters/static/mcp_app.html` and read once when the server is created. A `DigitalTwinUniverseError` in a tool is a tool error carrying its message and remedy. `digital-twin-universe mcp` runs it over stdio; the dashboard serves it over streamable HTTP.
+
+Raises `dashboard-not-compiled` when the view is missing.
+
+## Intelligence
+
+Model-backed capabilities run through the `Intelligence` protocol in `digital_twin_universe.intelligence.interface`:
 
 ```python
 class Intelligence(Protocol):
     implementation: str
 
-    def available_providers(self) -> list[str]: ...
-    def preflight(self, provider: str | None = None) -> str: ...
-    def run(self, request: ModelRequest) -> ModelResult: ...
+    def preflight(self) -> None: ...
+    def run(self, request: AgentRequest) -> AgentResult: ...
 ```
 
-`available_providers` reports which providers have resolvable credentials.
-`preflight` returns the provider that will serve a request, or raises
-`NoProviderError` naming the remedy, before any prompt is built. `run` runs
-one turn to completion.
+`preflight` raises `DigitalTwinUniverseError` naming what to configure when the implementation cannot run.
+`run` executes one agent: `AgentRequest` holds the prompt, model, optional workspace, and optional output schema; `AgentResult` holds the text, structured output, or error.
+Setting `AgentRequest.resume` to an earlier `AgentResult.session_id` continues that session instead of starting a fresh one, so the agent keeps what it learned.
+A request with a `workspace` gives the agent tools to read and search files and run commands in that directory on this host, and to write files too when `writable`: `view`, `grep`, and `bash`, plus `edit` and `write`, on `copilot`; `read_file`, `glob`, `grep`, and `bash`, plus `write_file` and `edit_file`, on `amplifier-agent`. `bash` is not sandboxed to the workspace: what bounds the agent is the caller's prompt, and the caller validates everything the agent produced before any of it is kept, the way `create_profile` checks that every file lies in the draft and launches the draft itself.
 
-Every model-backed capability (`create_profile`, `plan_install`, `diagnose`,
-`manage`) accepts an `intelligence=` argument. Passing one substitutes that
-implementation for the call; omitting it resolves to
-`default_intelligence()`, which returns the shipped `AmplifierIntelligence`,
-built on the amplifier-agent engine. Importing this package never pulls in a
-provider stack: `default_intelligence()` imports its implementation inside
-the function body, so deterministic capabilities stay runnable with nothing
-configured.
+`resolve_intelligence(agent_provider)` returns a shipped implementation, one per agent provider, each installed through the extra of the same name:
+
+- `copilot`: `CopilotIntelligence`, built on the [GitHub Copilot SDK](https://github.com/github/copilot-sdk) and signed in through the GitHub CLI.
+- `amplifier-agent`: `AmplifierAgentIntelligence`, built on [Amplifier Agent](https://github.com/microsoft/amplifier-agent). The model is `<provider>/<model>`, and `reasoning_effort` is ignored. Sessions live under the platform's per-user state directory, in `digital-twin-universe/amplifier-agent`.
+
+Without an agent provider named, the first installed in that order is used; one that is not installed raises `DigitalTwinUniverseError` with the command that installs it.
+Another implementation is a module satisfying the protocol and a branch in that factory.
+
+## Manifest and skill
+
+`load_manifest()` returns the tool's `SMART_TOOL.md` as structured data: the frontmatter as fields, the Markdown below it as `Manifest.body`.
+
+`skill()` is what an agent reads once it has decided to drive the tool: the manifest body and the capability list, wrapped so the reader knows where the tool's files are. The CLI's `--help` prints exactly this.
+`skill_directory()` is the installed package root, where the files the skill names can be read; `skill_resources()` lists those files relative to it, and every one ships inside the package.
+`repository_url()` is the tool's canonical source from the package metadata's `[project.urls]` `Repository` entry, or `None`; the skill carries it so a caller that can run the tool but not read its files still reaches the documentation.
+
+## Adding a capability
+
+A capability's code goes in `digital_twin_universe/capabilities/<name>/`, with its prompts and templates beside it, and `lib.py` gets a facade function that imports it and is the only caller of it.
+Each capability of the library gets a section here: what it does and when to reach for it, the signature `lib.py` exposes, what each argument means, and what it returns or raises. Name the result class; describe a field only when its name does not say enough.
+Model-backed capabilities say so, and take `agent_provider`, `model`, and `reasoning_effort`, defaulting to the first installed agent provider, its model in `DEFAULT_INTELLIGENCE_MODELS`, and `DEFAULT_INTELLIGENCE_REASONING_EFFORT` from `digital_twin_universe.schemas`.

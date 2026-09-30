@@ -1,0 +1,28 @@
+# A repository on this machine, installed in the twin from the URL it will have once it is released.
+# Nothing is mounted: the twin clones and installs over https, the way a user who had never seen the code would.
+#
+#   export DTU_REPOSITORY=~/code/my-tool
+#   export DTU_REPOSITORY_URL=https://github.com/me/my-tool
+#   digital-twin-universe launch --profile served-repository
+name: served-repository
+
+x-dtu:
+  description: A local git repository installed in the twin as if it were already released
+  twin_machine: box
+  repositories:
+    # The working tree is served as it is, so uncommitted changes are tested too.
+    - path: ${DTU_REPOSITORY:?set it to a git repository on this machine, such as ~/code/my-tool}
+      url: ${DTU_REPOSITORY_URL:?set it to the URL that repository stands in for, such as https://github.com/me/my-tool}
+
+services:
+  box:
+    build:
+      context: .
+      # The Dockerfile clones this, and the gateway sends it to the local checkout instead.
+      args:
+        REPOSITORY_URL: ${DTU_REPOSITORY_URL}
+    # Keeps the twin up for `exec`, since the install already happened during the build.
+    command: sleep infinity
+    healthcheck:
+      test: [CMD, test, -d, /home/user/repo/.git]
+      interval: 2s

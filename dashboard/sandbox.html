@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- The dashboard server fills this in when it serves the page, and sends the view's CSP as a header. -->
+    <meta name="digital-twin-universe-host-port" content="{{host_port}}" />
+    <title>Digital Twin Universe sandbox</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background-color: transparent;
+      }
+      iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: none;
+        color-scheme: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module" src="/host/sandbox.ts"></script>
+  </body>
+</html>
