@@ -1,49 +1,69 @@
 [project]
-name = "amplifier-digital-twin-universe"
-version = "0.2.0"
-description = "Stand up isolated, realistic environments from a declarative profile, and manage them for their whole life."
+name = "digital-twin-universe"
+version = "0.3.0"
+description = "Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host"
 readme = "README.md"
 authors = [
     { name = "David Koleczek", email = "45405824+DavidKoleczek@users.noreply.github.com" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
-    "amplifier-bundle-digital-twin-universe @ git+https://github.com/microsoft/amplifier-bundle-digital-twin-universe@main",
-    "amplifier-agent @ git+https://github.com/microsoft/amplifier-agent@main",
+    "certifi>=2026.7.22,<2027.0.0",
+    "fastapi>=0.141.1,<0.142.0",
+    "jsonschema>=4.26.0,<5.0.0",
+    "mcp>=2.2,<3.0",
     "pydantic>=2.13,<3.0",
-    # The shipped model implementation reaches Anthropic by default, and the
-    # engine mounts a provider only when its client library is importable.
-    "anthropic>=1.0,<2.0",
+    "python-liquid>=2.3.1,<3.0.0",
+    "python-on-whales>=0.81.0,<0.82.0",
+    "pyyaml>=6.0.3,<7.0.0",
+    "typer>=0.27.2,<0.28.0",
+    "uvicorn>=0.53.0,<0.54.0",
 ]
 
 [project.urls]
 Repository = "https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
 
-[project.optional-dependencies]
-openai = ["openai>=1.0,<3.0"]
-gemini = ["google-genai>=1.0,<2.0"]
-
 [project.scripts]
-amplifier-digital-twin-universe = "amplifier_digital_twin_universe.cli:main"
+digital-twin-universe = "digital_twin_universe.cli:main"
+
+[project.optional-dependencies]
+copilot = [
+    "github-copilot-sdk>=1.0.7,<2.0.0",
+]
+amplifier-agent = [
+    "amplifier-agent @ git+https://github.com/microsoft/amplifier-agent@v1#subdirectory=packages/python",
+]
+all = [
+    "digital-twin-universe[copilot,amplifier-agent]",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
 
+[tool.uv.build-backend]
+module-name = "digital_twin_universe"
+
 [tool.uv]
+add-bounds = "major"
+default-groups = "all"
 exclude-newer = "5 days"
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1,<0.29.0",
     "pytest>=9.1",
     "pytest-asyncio>=1.4",
+    "pytest-xdist>=3.8",
     "ruff>=0.16",
-    "ty>=0.0.71",
+    "ty>=0.0.79",
+    "types-pyyaml>=6.0.12.20260906,<7.0.0.0",
 ]
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py313"
+extend-exclude = ["dashboard"]
 
 [tool.ruff.lint]
 select = [
@@ -79,6 +99,17 @@ split-on-trailing-comma = false
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
+[tool.ty.src]
+# The templates are rendered into a universe and run there, against dependencies this project does not have.
+exclude = ["src/digital_twin_universe/capabilities/universe/templates"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Workers share one Docker daemon, which is the bottleneck past eight or so. `-n0` runs in-process for debugging.
+addopts = "-n auto --maxprocesses=8"
+markers = [
+    "needs_docker: exercises a real Docker daemon; skipped where one is not usable",
+    "live: launches universes; the slow tests, a few seconds to a minute each",
+    "model: calls a real model through an agent provider; slow and paid, deselect with -m \"not model\"",
+]

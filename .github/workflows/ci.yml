@@ -23,7 +23,7 @@ jobs:
         with:
           enable-cache: true
 
-      - run: uv sync --all-groups
+      - run: uv sync --all-groups --all-extras
 
       - name: Format
         run: uv run ruff format --check .
@@ -31,8 +31,12 @@ jobs:
       - name: Lint
         run: uv run ruff check .
 
+      - name: Type check
+        run: uv run ty check
+
+      # No model credentials in CI. Docker is on the runner, so needs_docker and live tests run.
       - name: Tests
-        run: uv run pytest -q
+        run: uv run pytest -q -m "not model"
 
       # The kit never installs the tool under test, so the console script named
       # by cli_argv has to resolve on PATH before the runtime rules can run.

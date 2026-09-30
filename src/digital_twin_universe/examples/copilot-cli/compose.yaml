@@ -1,0 +1,19 @@
+# Base of the project name; launch appends a short id.
+name: copilot-cli
+
+x-dtu:
+  description: GitHub Copilot CLI installed as a user would install it
+  twin_machine: copilot
+
+services:
+  copilot:
+    # The Dockerfile beside this file, built with the universe's network up.
+    build: .
+    # Read from the host at launch, never written to any file. Unset, it fails with this message.
+    environment:
+      GH_TOKEN: ${GH_TOKEN:?Set GH_TOKEN to a GitHub token with Copilot access, for example `export GH_TOKEN=$(gh auth token)`}
+    # Keeps the twin up for exec.
+    command: sleep infinity
+    # launch waits for this before reporting ready.
+    healthcheck:
+      test: [CMD, copilot, --version]

@@ -1,0 +1,19 @@
+# The smallest universe: one twin with nothing installed. `install` launches it to prove a fresh Docker
+# actually runs a universe, and it is the quickest way to try `exec` on any machine.
+#
+#   digital-twin-universe launch --profile hello
+#   digital-twin-universe exec --id <id> --command "echo dtu-ok"
+name: hello
+
+x-dtu:
+  description: The smallest universe, an Alpine twin with nothing installed
+
+services:
+  twin:
+    image: alpine:3.20
+    user: nobody
+    # Keeps the twin up for exec.
+    command: sleep infinity
+    healthcheck:
+      test: [CMD, "true"]
+      interval: 2s
