@@ -114,16 +114,16 @@ wheels = [
 
 [[package]]
 name = "amplifier-agent"
-version = "1.0.0a1"
-source = { git = "https://github.com/microsoft/amplifier-agent?subdirectory=packages%2Fpython&rev=v1#11e35e05957c2e2b2de7aad8526dcb71adbe95ef" }
+version = "1.0.0a2"
+source = { git = "https://github.com/microsoft/amplifier-agent?subdirectory=packages%2Fpython&rev=v1#2d82ef65335c37f38fbc7f79c1f2bff8175e09ad" }
 dependencies = [
     { name = "amplifier-agent-engine" },
 ]
 
 [[package]]
 name = "amplifier-agent-engine"
-version = "1.0.0a1"
-source = { git = "https://github.com/microsoft/amplifier-agent?subdirectory=packages%2Fengine&rev=v1#11e35e05957c2e2b2de7aad8526dcb71adbe95ef" }
+version = "1.0.0a2"
+source = { git = "https://github.com/microsoft/amplifier-agent?subdirectory=packages%2Fengine&rev=v1#2d82ef65335c37f38fbc7f79c1f2bff8175e09ad" }
 dependencies = [
     { name = "amplifier-core" },
     { name = "amplifier-foundation" },
@@ -791,7 +791,7 @@ wheels = [
 
 [[package]]
 name = "digital-twin-universe"
-version = "0.3.2"
+version = "0.3.3"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },
