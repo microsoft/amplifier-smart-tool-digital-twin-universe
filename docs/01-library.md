@@ -340,11 +340,13 @@ Another implementation is a module satisfying the protocol and a branch in that 
 `load_manifest()` returns the tool's `SMART_TOOL.md` as structured data: the frontmatter as fields, the Markdown below it as `Manifest.body`.
 
 `skill()` is what an agent reads once it has decided to drive the tool: the manifest body and the capability list, wrapped so the reader knows where the tool's files are. The CLI's `--help` prints exactly this.
+`skill(capability)` is one capability's skill in the same shape: its body is the Liquid template the capability's row in `core/skill.py` names, rendered with the defaults from `digital_twin_universe.schemas`. The CLI's `<command> --help` prints exactly this.
 `skill_directory()` is the installed package root, where the files the skill names can be read; `skill_resources()` lists those files relative to it, and every one ships inside the package.
 `repository_url()` is the tool's canonical source from the package metadata's `[project.urls]` `Repository` entry, or `None`; the skill carries it so a caller that can run the tool but not read its files still reaches the documentation.
 
 ## Adding a capability
 
 A capability's code goes in `digital_twin_universe/capabilities/<name>/`, with its prompts and templates beside it, and `lib.py` gets a facade function that imports it and is the only caller of it.
+It also gets a row in `CAPABILITIES` in `core/skill.py` naming its skill, a Markdown file beside its code that carries when to use it, a worked invocation, every argument, the result, and the failures.
 Each capability of the library gets a section here: what it does and when to reach for it, the signature `lib.py` exposes, what each argument means, and what it returns or raises. Name the result class; describe a field only when its name does not say enough.
 Model-backed capabilities say so, and take `agent_provider`, `model`, and `reasoning_effort`, defaulting to the first installed agent provider, its model in `DEFAULT_INTELLIGENCE_MODELS`, and `DEFAULT_INTELLIGENCE_REASONING_EFFORT` from `digital_twin_universe.schemas`.

@@ -10,10 +10,11 @@ Results go to stdout and diagnostics to stderr. A failure the library can name p
 ```
 digital-twin-universe -h                 terse summary for a person: the commands, a line each
 digital-twin-universe --help             the tool's skill, written for an agent driving it
-digital-twin-universe <command> --help   one command in full: arguments, defaults, exit codes
+digital-twin-universe <command> -h       terse summary of one command: its options
+digital-twin-universe <command> --help   the command's skill: when to use it, arguments, result, failures
 ```
 
-`--help` on the tool prints what `lib.skill()` returns; the CLI adds nothing of its own. Every command answers both `-h` and `--help` with the same per-command help.
+`--help` prints what `lib.skill()` returns on the tool and `lib.skill(<command>)` on a command; the CLI adds nothing of its own.
 
 ## digital-twin-universe manifest
 

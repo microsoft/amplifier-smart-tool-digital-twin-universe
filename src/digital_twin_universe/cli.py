@@ -1,12 +1,18 @@
 """Command line entry point for Digital Twin Universe."""
 
+from collections.abc import Callable
 import contextlib
 import json
 from pathlib import Path
 import threading
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
+
+# Typer 0.27 vendors Click, so a command that overrides Click's own hooks has to speak the vendored types.
+from typer._click import Context, Parameter
+from typer.core import TyperCommand, TyperOption
+from typer.models import CommandFunctionType
 
 from digital_twin_universe import lib
 from digital_twin_universe.adapters import mcp as mcp_adapter
@@ -31,11 +37,60 @@ def _model_help(defaults: dict[AgentProvider, str]) -> str:
     return f"A Copilot model id for copilot, <provider>/<model> for amplifier-agent. Defaults to {named}."
 
 
-app = typer.Typer(
+class CapabilityCommand(TyperCommand):
+    """A capability that answers `-h` with the generated summary and `--help` with its skill from the library."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs["add_help_option"] = False
+        super().__init__(*args, **kwargs)
+
+    def get_params(self, ctx: Context) -> list[Parameter]:
+        def short(ctx: Context, param: Parameter, value: bool) -> None:
+            if value and not ctx.resilient_parsing:
+                typer.echo(ctx.get_help())
+                ctx.exit()
+
+        def capability_skill(ctx: Context, param: Parameter, value: bool) -> None:
+            if value and not ctx.resilient_parsing:
+                typer.echo(lib.skill(self.name))
+                ctx.exit()
+
+        return [
+            *super().get_params(ctx),
+            TyperOption(
+                param_decls=["-h"],
+                is_flag=True,
+                is_eager=True,
+                expose_value=False,
+                callback=short,
+                help="Terse summary of this capability.",
+            ),
+            TyperOption(
+                param_decls=["--help"],
+                is_flag=True,
+                is_eager=True,
+                expose_value=False,
+                callback=capability_skill,
+                help="This capability's skill, for an agent about to call it.",
+            ),
+        ]
+
+
+class SmartToolTyper(typer.Typer):
+    """A Typer whose commands are CapabilityCommand by default, so a capability added later inherits the help split."""
+
+    def command(
+        self, *args: Any, cls: type[TyperCommand] = CapabilityCommand, **kwargs: Any
+    ) -> Callable[[CommandFunctionType], CommandFunctionType]:
+        return super().command(*args, cls=cls, **kwargs)
+
+
+app = SmartToolTyper(
     no_args_is_help=True,
     pretty_exceptions_show_locals=False,
     # Every command answers both flags. The root callback claims `--help` for the skill below, and Click drops a
-    # help option name already taken by a parameter, which leaves the root's generated summary on `-h`.
+    # help option name already taken by a parameter, which leaves the root's generated summary on `-h`. A
+    # CapabilityCommand splits the two itself.
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 

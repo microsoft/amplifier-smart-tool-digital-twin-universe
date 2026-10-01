@@ -65,11 +65,13 @@ class Manifest(BaseModel):
 
 
 class Capability(NamedTuple):
-    """One capability of the tool, as the skill's capability list presents it."""
+    """One capability of the tool: its line in the skill's capability list and its own skill."""
 
     name: str
     summary: str
     model_backed: bool
+    skill: str  # the capability's skill body, a Liquid-templated Markdown file relative to the skill directory
+    resources: tuple[str, ...] = ()  # the files that skill refers to, relative to the skill directory
 
 
 # endregion
