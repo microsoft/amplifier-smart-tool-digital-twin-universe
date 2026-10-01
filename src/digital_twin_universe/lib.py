@@ -39,9 +39,9 @@ def load_manifest() -> Manifest:
     return manifest.load_manifest()
 
 
-def skill() -> str:
-    """The tool's skill: the manifest body and the capability list, wrapped so a reader knows where its files are."""
-    return skill_module.skill()
+def skill(capability: str | None = None) -> str:
+    """The tool's skill, or one capability's skill when named, wrapped so a reader knows where its files are."""
+    return skill_module.skill(capability)
 
 
 def skill_directory() -> Path:

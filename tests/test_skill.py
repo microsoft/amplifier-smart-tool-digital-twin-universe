@@ -1,10 +1,21 @@
+import click
 import pytest
+import typer
+
+# Typer 0.27 vendors Click, so building a context for its command group needs the vendored type.
+from typer._click import Context
 from typer.testing import CliRunner
 
 from digital_twin_universe.cli import app
 from digital_twin_universe.core import skill as skill_module
 from digital_twin_universe.core.skill import CAPABILITIES
 from digital_twin_universe.lib import load_manifest, skill, skill_directory, skill_resources
+from digital_twin_universe.schemas import (
+    DEFAULT_INTELLIGENCE_MODELS,
+    DEFAULT_INTELLIGENCE_REASONING_EFFORT,
+    Capability,
+    DigitalTwinUniverseError,
+)
 
 RELATIVE_PATHS_LINE = "Relative paths in this skill are relative to the skill directory."
 
@@ -82,9 +93,58 @@ def test_short_help_and_no_arguments_print_the_terse_summary() -> None:
     assert "<skill_content" not in bare.stdout
 
 
-def test_every_command_answers_its_own_help() -> None:
-    for capability in CAPABILITIES:
-        result = runner.invoke(app, [capability.name, "--help"])
+@pytest.mark.parametrize("capability", CAPABILITIES, ids=lambda capability: capability.name)
+def test_a_capability_skill_has_the_tool_s_shape_and_its_own_body(capability: Capability) -> None:
+    document = skill(capability.name)
+    kind = "Model-backed." if capability.model_backed else "Deterministic."
 
-        assert result.exit_code == 0
-        assert result.stdout.strip()
+    assert document.startswith(f'<skill_content name="digital-twin-universe {capability.name}">')
+    assert document.endswith("</skill_content>")
+    assert "Part of `digital-twin-universe`; `digital-twin-universe --help` is the tool's skill." in document
+    assert f"# digital-twin-universe {capability.name}\n\n{kind}\n\n" in document
+    for section in ("## Arguments", "## Result", "## Failures"):
+        assert section in document
+
+
+@pytest.mark.parametrize("capability", CAPABILITIES, ids=lambda capability: capability.name)
+def test_a_capability_skill_names_every_cli_option(capability: Capability) -> None:
+    document = skill(capability.name)
+    group = typer.main.get_group(app)
+    command = group.get_command(Context(group), capability.name)
+
+    assert command is not None
+    for param in command.params:
+        for option in param.opts:
+            if option not in ("-h", "--help"):
+                assert f"`{option}" in document, option
+
+
+@pytest.mark.parametrize("capability", CAPABILITIES, ids=lambda capability: capability.name)
+def test_capability_help_prints_its_skill_and_short_help_the_summary(capability: Capability) -> None:
+    skill_help = runner.invoke(app, [capability.name, "--help"])
+    short = runner.invoke(app, [capability.name, "-h"])
+
+    assert skill_help.exit_code == 0
+    assert skill_help.stdout.strip() == skill(capability.name)
+    assert short.exit_code == 0
+    assert "<skill_content" not in short.stdout
+    # Typer forces color under GITHUB_ACTIONS.
+    assert f"Usage: root {capability.name} [OPTIONS]" in click.unstyle(short.stdout)
+
+
+@pytest.mark.parametrize(
+    "capability", [capability for capability in CAPABILITIES if capability.model_backed], ids=lambda c: c.name
+)
+def test_a_model_backed_skill_states_the_defaults_the_code_applies(capability: Capability) -> None:
+    document = " ".join(skill(capability.name).split())
+
+    for agent_provider, model in DEFAULT_INTELLIGENCE_MODELS.items():
+        assert f"`{model}` on `{agent_provider}`" in document
+    assert f"Defaults to `{DEFAULT_INTELLIGENCE_REASONING_EFFORT}`" in document
+
+
+def test_an_unknown_capability_has_no_skill() -> None:
+    with pytest.raises(DigitalTwinUniverseError) as raised:
+        skill("no-such-capability")
+
+    assert raised.value.code == "capability-unknown"
