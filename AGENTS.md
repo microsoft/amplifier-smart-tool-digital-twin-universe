@@ -10,6 +10,7 @@ This is a Smart Tool that must conform to Microsoft's [Amplifier Smart Tool Spec
 - Deterministic capabilities run with no model provider configured. Model-backed capabilities go through the `Intelligence` interface, never an SDK directly, and their help text says they are model-backed. They run through the agent provider `agent_provider` names, or the first installed, and default to that agent provider's model in `DEFAULT_INTELLIGENCE_MODELS` and `DEFAULT_INTELLIGENCE_REASONING_EFFORT` from `schemas.py`, exposing all three as parameters; never hardcode a model name.
 - Failures name what went wrong and how to fix it. The caller is usually an agent.
 - Once this tool has a remote, declare it in `pyproject.toml` under `[project.urls]` as `Repository = "<url>"`. `--help` then carries it, so an agent that can run the tool but not read its files still finds the docs.
+- Every change to the library or CLI bumps the version: minor for breaking changes while below 1.0, patch otherwise. Run `uv version --bump <part>`, then set the same version in `src/digital_twin_universe/SMART_TOOL.md` and `skills/digital-twin-universe/SKILL.md`.
 - Never modify this file unless explictly told.
 
 ## Writing Style
