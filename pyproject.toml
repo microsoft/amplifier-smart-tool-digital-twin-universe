@@ -1,6 +1,6 @@
 [project]
 name = "digital-twin-universe"
-version = "0.3.2"
+version = "0.3.3"
 description = "Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host"
 readme = "README.md"
 authors = [
