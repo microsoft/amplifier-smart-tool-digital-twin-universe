@@ -2,6 +2,7 @@
 
 from importlib.machinery import ModuleSpec
 
+import click
 import pytest
 from typer.testing import CliRunner
 
@@ -154,8 +155,10 @@ def test_the_create_profile_cli_passes_the_agent_provider_and_model_through(monk
 @pytest.mark.parametrize("command", ["install", "create-profile"])
 def test_the_help_names_the_agent_providers_and_their_default_models(command: str) -> None:
     result = runner.invoke(app, [command, "-h"], env={"COLUMNS": "400"})
+    # Typer forces color under GITHUB_ACTIONS, and Rich styles each dash of an option on its own.
+    output = click.unstyle(result.output)
 
     assert result.exit_code == 0
-    assert "--agent-provider" in result.output
+    assert "--agent-provider" in output
     for agent_provider, model in DEFAULT_INTELLIGENCE_MODELS.items():
-        assert f"{agent_provider}: {model}" in result.output
+        assert f"{agent_provider}: {model}" in output

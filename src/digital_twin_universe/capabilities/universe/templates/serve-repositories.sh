@@ -39,10 +39,17 @@ for source in /repos/*/; do
     branch=$(git rev-parse --abbrev-ref HEAD)
     [ "$branch" = HEAD ] && branch=detached
     remote="http://dtu:$DTU_PASSWORD@127.0.0.1:3000/dtu/$name.git"
-    # The checked-out branch goes first so it becomes the default, then every other local branch and tag, since
-    # a consumer pinning `@main` while the developer sits on a fix branch still has to find `main`.
-    git push -q --force "$remote" "HEAD:refs/heads/$branch"
-    git push -q --force "$remote" "refs/heads/*:refs/heads/*" "refs/tags/*:refs/tags/*" || true
+    if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+        # Gitea refuses history that ends in missing parents, as a CI checkout's does, so a shallow checkout is
+        # served as its working tree alone, on one parentless commit.
+        snapshot=$(git commit-tree "HEAD^{tree}" -m "the working tree as it was at launch")
+        git push -q --force "$remote" "$snapshot:refs/heads/$branch"
+    else
+        # The checked-out branch goes first so it becomes the default, then every other local branch and tag,
+        # since a consumer pinning `@main` while the developer sits on a fix branch still has to find `main`.
+        git push -q --force "$remote" "HEAD:refs/heads/$branch"
+        git push -q --force "$remote" "refs/heads/*:refs/heads/*" "refs/tags/*:refs/tags/*" || true
+    fi
     echo "digital-twin-universe: serving /dtu/$name at branch $branch"
 done
 

@@ -131,7 +131,7 @@ The twin is not told its name. Requests arrive with the `Host` header the client
 
 Local git repositories served from inside the universe, so the twin can clone and install them from the URL they will have once released. Each has:
 
-- `path`: a repository on the host, relative to the profile. Every local branch and tag is served. The checked-out branch is the default and carries the working tree, so uncommitted changes are tested too, and a consumer pinning `@main` still finds `main` while the developer sits on a fix branch.
+- `path`: a repository on the host, relative to the profile. Every local branch and tag is served. The checked-out branch is the default and carries the working tree, so uncommitted changes are tested too, and a consumer pinning `@main` still finds `main` while the developer sits on a fix branch. A shallow clone serves only the checked-out branch, as one commit holding the working tree.
 - `url`: optional. The URL the repository stands in for, such as `https://github.com/microsoft/amplifier-core`. A trailing `.git` or `/` is ignored. Without `url`, the repository is reachable only at the git server's own address, `http://git:3000/dtu/<repo>`.
 
 A request matches a `url` when the host is the same and the path, with a `.git` at the repository boundary ignored, is the `url` path or continues from it with `/`. Query and fragment take no part, and the comparison ignores case, as GitHub and Gitea both do. So `https://github.com/microsoft/amplifier` matches every way a tool reaches that repository over its host:
