@@ -114,16 +114,16 @@ wheels = [
 
 [[package]]
 name = "amplifier-agent"
-version = "1.0.0a2"
-source = { git = "https://github.com/microsoft/amplifier-agent?subdirectory=packages%2Fpython&rev=v1#2d82ef65335c37f38fbc7f79c1f2bff8175e09ad" }
+version = "0.20.0"
+source = { git = "https://github.com/microsoft/amplifier-agent?subdirectory=packages%2Fpython&rev=v0.20.0#fcdea58fcefa14c8340e6fd4d703947d08451dd3" }
 dependencies = [
     { name = "amplifier-agent-engine" },
 ]
 
 [[package]]
 name = "amplifier-agent-engine"
-version = "1.0.0a2"
-source = { git = "https://github.com/microsoft/amplifier-agent?subdirectory=packages%2Fengine&rev=v1#2d82ef65335c37f38fbc7f79c1f2bff8175e09ad" }
+version = "0.20.0"
+source = { git = "https://github.com/microsoft/amplifier-agent?subdirectory=packages%2Fengine&rev=v0.20.0#fcdea58fcefa14c8340e6fd4d703947d08451dd3" }
 dependencies = [
     { name = "amplifier-core" },
     { name = "amplifier-foundation" },
@@ -791,7 +791,7 @@ wheels = [
 
 [[package]]
 name = "digital-twin-universe"
-version = "0.3.3"
+version = "0.3.4"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },
@@ -831,7 +831,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "amplifier-agent", marker = "extra == 'amplifier-agent'", git = "https://github.com/microsoft/amplifier-agent?subdirectory=packages%2Fpython&rev=v1" },
+    { name = "amplifier-agent", marker = "extra == 'amplifier-agent'", git = "https://github.com/microsoft/amplifier-agent?subdirectory=packages%2Fpython&rev=v0.20.0" },
     { name = "certifi", specifier = ">=2026.7.22,<2027.0.0" },
     { name = "digital-twin-universe", extras = ["copilot", "amplifier-agent"], marker = "extra == 'all'" },
     { name = "fastapi", specifier = ">=0.141.1,<0.142.0" },

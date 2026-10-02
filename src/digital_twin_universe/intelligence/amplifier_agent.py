@@ -39,7 +39,7 @@ from digital_twin_universe.schemas import DEFAULT_INTELLIGENCE_MODELS, DigitalTw
 
 READ_ONLY_TOOLS = ["read_file", "glob", "grep", "bash"]
 WRITE_TOOLS = ["write_file", "edit_file"]
-PROVIDERS_DOCUMENTATION = "https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md"
+PROVIDERS_DOCUMENTATION = "https://github.com/microsoft/amplifier-agent/blob/v0.20.0/docs/providers.md"
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 # The runtime rejects arguments that break a tool's declared schema before the handler runs, and ends the turn.
 # Declaring any object and validating in the handler turns a bad submission into a failure the model can retry.
