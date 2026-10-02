@@ -13,6 +13,7 @@ from amplifier_agent import (
     AgentError,
     AgentOptions,
     Event,
+    ImagePart,
     SessionRecord,
     TextPart,
     Tool,
@@ -47,7 +48,7 @@ def success(*deltas: str) -> TurnResult:
     return TurnResult(state="success", content=[TextPart(text=delta) for delta in deltas])
 
 
-async def submit(tools: dict[str, Tool], arguments: dict[str, Any]) -> str:
+async def submit(tools: dict[str, Tool], arguments: dict[str, Any]) -> str | list[TextPart | ImagePart]:
     return await tools[SUBMIT_TOOL].handler(arguments, ToolContext(call_id="call"))
 
 
@@ -72,7 +73,7 @@ class FakeSession:
         self._world = world
 
     async def start_turn(self, input: TurnInput) -> FakeTurn:
-        prompt = "".join(part.text for part in input.content)
+        prompt = "".join(part.text for part in input.content if isinstance(part, TextPart))
         self._world.prompts.append(prompt)
         script = self._world.scripts.pop(0)
         turn = FakeTurn(await script(self._world.tools, prompt))
