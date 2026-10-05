@@ -5,7 +5,7 @@ description: >-
 license: MIT
 metadata:
   author: DavidKoleczek
-  version: "0.3.4"
+  version: "0.4.0"
   repository: https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
 ---
 
@@ -26,13 +26,15 @@ uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-
 uvx --from "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe" digital-twin-universe --help
 ```
 
-`[all]` brings both agent providers the model-backed capabilities run through. Alternatives:
+`[all]` brings every agent provider the model-backed capabilities run through. Alternatives:
 
 ```bash
 # Only the GitHub Copilot agent provider
 uv tool install "digital-twin-universe[copilot] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
 # Only the Amplifier Agent agent provider
 uv tool install "digital-twin-universe[amplifier-agent] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+# Only the Codex agent provider
+uv tool install "digital-twin-universe[codex] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
 # Deterministic capabilities only
 uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
 ```

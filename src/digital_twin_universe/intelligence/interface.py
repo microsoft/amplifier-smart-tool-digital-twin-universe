@@ -8,7 +8,11 @@ from digital_twin_universe.intelligence.schemas import AgentRequest, AgentResult
 from digital_twin_universe.schemas import AGENT_PROVIDERS, AgentProvider, DigitalTwinUniverseError
 
 # The import each agent provider's SDK answers to; its extra is named after the agent provider.
-SDK_MODULES: dict[AgentProvider, str] = {"copilot": "copilot", "amplifier-agent": "amplifier_agent"}
+SDK_MODULES: dict[AgentProvider, str] = {
+    "copilot": "copilot",
+    "amplifier-agent": "amplifier_agent",
+    "codex": "openai_codex",
+}
 
 
 class Intelligence(Protocol):
@@ -72,6 +76,10 @@ def resolve_intelligence(agent_provider: AgentProvider | None = None, model: str
             from digital_twin_universe.intelligence.amplifier_agent import AmplifierAgentIntelligence
 
             return AmplifierAgentIntelligence() if model is None else AmplifierAgentIntelligence(model)
+        case "codex":
+            from digital_twin_universe.intelligence.codex import CodexIntelligence
+
+            return CodexIntelligence()
 
 
 def select_intelligence(

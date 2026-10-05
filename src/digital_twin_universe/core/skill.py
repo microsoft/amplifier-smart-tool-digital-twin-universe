@@ -1,6 +1,7 @@
 """Skill: what the tool tells an agent that has decided to drive it."""
 
 from importlib.metadata import metadata
+from importlib.metadata import version as distribution_version
 from pathlib import Path
 
 from liquid import Environment, StrictUndefined
@@ -125,6 +126,11 @@ SKILL_VARIABLES = {
 def skill_directory() -> Path:
     """The installed package root, resolved at runtime, where the tool's own files live."""
     return MANIFEST_PATH.parent.resolve()
+
+
+def version() -> str:
+    """The installed package's version, from its metadata."""
+    return distribution_version(DISTRIBUTION)
 
 
 def repository_url() -> str | None:

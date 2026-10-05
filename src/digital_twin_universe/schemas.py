@@ -5,14 +5,15 @@ from typing import Literal, NamedTuple
 from pydantic import BaseModel, ConfigDict, Field
 
 ReasoningEffort = Literal["low", "medium", "high", "xhigh", "max"]
-AgentProvider = Literal["copilot", "amplifier-agent"]
+AgentProvider = Literal["copilot", "amplifier-agent", "codex"]
 # Also the order an agent provider is picked in when none is named.
-AGENT_PROVIDERS: tuple[AgentProvider, ...] = ("copilot", "amplifier-agent")
+AGENT_PROVIDERS: tuple[AgentProvider, ...] = ("copilot", "amplifier-agent", "codex")
 
 DEFAULT_INTELLIGENCE_MODEL = "gpt-6.1-sol"
 DEFAULT_INTELLIGENCE_MODELS: dict[AgentProvider, str] = {
     "copilot": DEFAULT_INTELLIGENCE_MODEL,
     "amplifier-agent": "openai/gpt-6.1-sol",
+    "codex": DEFAULT_INTELLIGENCE_MODEL,
 }
 DEFAULT_INTELLIGENCE_REASONING_EFFORT: ReasoningEffort = "high"
 

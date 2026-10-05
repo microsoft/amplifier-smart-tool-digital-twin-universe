@@ -1,7 +1,7 @@
 ---
 smart_tool_format: 1
 name: digital-twin-universe
-version: 0.3.4
+version: 0.4.0
 description: >-
   Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed
 use_cases:
@@ -39,6 +39,12 @@ requires:
       capabilities cannot run through amplifier-agent. See the full list of options at the install link.
     optional: true
     install: https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md
+  - name: codex-sign-in
+    purpose: >-
+      The Codex CLI signed in with ChatGPT or an API key, for the codex agent provider.
+      Without it, the model-backed capabilities cannot run through codex.
+    optional: true
+    install: https://developers.openai.com/codex/auth
 ---
 
 Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed.
@@ -129,13 +135,15 @@ uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-
 uvx --from "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe" digital-twin-universe --help
 ```
 
-`[all]` brings both agent providers the model-backed capabilities run through. Alternatives:
+`[all]` brings every agent provider the model-backed capabilities run through. Alternatives:
 
 ```bash
 # Only the GitHub Copilot agent provider
 uv tool install "digital-twin-universe[copilot] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
 # Only the Amplifier Agent agent provider
 uv tool install "digital-twin-universe[amplifier-agent] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+# Only the Codex agent provider
+uv tool install "digital-twin-universe[codex] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
 # Deterministic capabilities only
 uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
 ```
@@ -163,8 +171,8 @@ new Docker, not just that `check` passes. Follow its single `next` instruction w
 remains. No step prompts on stdin. Partial installation is reported, not rolled back.
 
 Deterministic capabilities need only `uv` and Docker. Model-backed capabilities run through an agent
-provider, picked with `--agent-provider`, or the first installed of `copilot` and
-`amplifier-agent` when omitted:
+provider, picked with `--agent-provider`, or the first installed of `copilot`,
+`amplifier-agent`, and `codex` when omitted:
 
 - `copilot`: GitHub Copilot, signed in as the GitHub CLI's user. `gh` must be installed and
   `gh auth login` completed with an account that has a Copilot subscription.
@@ -172,6 +180,9 @@ provider, picked with `--agent-provider`, or the first installed of `copilot` an
   the model provider named in `--model <provider>/<model>` with that provider's credentials,
   for instance `OPENAI_API_KEY` for the default `openai/...` model. See its
   [providers](https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md).
+- `codex`: [OpenAI Codex](https://github.com/openai/codex), with the user's Codex configuration.
+  The Codex CLI must be signed in with ChatGPT or an API key, see
+  [authentication](https://developers.openai.com/codex/auth).
 
 Without an agent provider installed and configured, a model-backed capability fails immediately
 and names what to install or configure; it never falls back to a deterministic answer.
@@ -182,7 +193,7 @@ Windows a profile can opt into Windows containers.
 ## Straight and smart paths
 
 Deterministic capabilities run with no provider configured. Model-backed capabilities go
-through GitHub Copilot or Amplifier Agent, whichever `--agent-provider` names, and say so in
+through GitHub Copilot, Amplifier Agent, or Codex, whichever `--agent-provider` names, and say so in
 their help text.
 
 ## Output and failure contract
