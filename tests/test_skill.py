@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 from digital_twin_universe.cli import app
 from digital_twin_universe.core import skill as skill_module
 from digital_twin_universe.core.skill import CAPABILITIES
-from digital_twin_universe.lib import load_manifest, skill, skill_directory, skill_resources
+from digital_twin_universe.lib import load_manifest, skill, skill_directory, skill_resources, version
 from digital_twin_universe.schemas import (
     DEFAULT_INTELLIGENCE_MODELS,
     DEFAULT_INTELLIGENCE_REASONING_EFFORT,
@@ -148,3 +148,11 @@ def test_an_unknown_capability_has_no_skill() -> None:
         skill("no-such-capability")
 
     assert raised.value.code == "capability-unknown"
+
+
+@pytest.mark.parametrize("flag", ["--version", "-V"])
+def test_version_prints_the_distribution_and_its_installed_version(flag: str) -> None:
+    result = runner.invoke(app, [flag])
+
+    assert result.exit_code == 0
+    assert result.output == f"digital-twin-universe {version()}\n"

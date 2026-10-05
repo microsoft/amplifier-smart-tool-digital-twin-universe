@@ -54,6 +54,11 @@ def skill_resources() -> list[str]:
     return skill_module.skill_resources()
 
 
+def version() -> str:
+    """The installed package's version, from its metadata."""
+    return skill_module.version()
+
+
 def repository_url() -> str | None:
     """The tool's canonical source, from the package metadata, or None when the package declares none."""
     return skill_module.repository_url()

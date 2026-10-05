@@ -12,6 +12,7 @@ digital-twin-universe -h                 terse summary for a person: the command
 digital-twin-universe --help             the tool's skill, written for an agent driving it
 digital-twin-universe <command> -h       terse summary of one command: its options
 digital-twin-universe <command> --help   the command's skill: when to use it, arguments, result, failures
+digital-twin-universe -V, --version      the installed version
 ```
 
 `--help` prints what `lib.skill()` returns on the tool and `lib.skill(<command>)` on a command; the CLI adds nothing of its own.
@@ -35,7 +36,7 @@ digital-twin-universe check
 ## digital-twin-universe install
 
 ```bash
-digital-twin-universe install [--yes] [--accept-license] [--agent-provider copilot|amplifier-agent] [--model MODEL]
+digital-twin-universe install [--yes] [--accept-license] [--agent-provider copilot|amplifier-agent|codex] [--model MODEL]
                  [--reasoning-effort low] [--timeout-seconds 1200]
 ```
 
@@ -46,7 +47,7 @@ digital-twin-universe install [--yes] [--accept-license] [--agent-provider copil
 ```bash
 digital-twin-universe create-profile --description "a FastAPI app on port 8000 using Postgres" [--project .] [--name web-app]
                         [--no-verify] [--keep] [--overwrite] [--max-attempts 3]
-                        [--agent-provider copilot|amplifier-agent] [--model MODEL]
+                        [--agent-provider copilot|amplifier-agent|codex] [--model MODEL]
                         [--reasoning-effort low] [--timeout-seconds 1800]
 ```
 

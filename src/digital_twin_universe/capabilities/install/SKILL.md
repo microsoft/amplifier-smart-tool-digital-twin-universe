@@ -75,11 +75,12 @@ remains, or the deadline passes.
   first installed, in that order, when omitted. Unused when Docker is already usable.
 - `--model`: the model that plans the install and its repair: a Copilot model id for
   `copilot`, `<provider>/<model>` for `amplifier-agent` (for instance
-  `anthropic/claude-opus-5`).
-  Defaults to `{{ default_intelligence_models.copilot }}` on `copilot` and
-  `{{ default_intelligence_models["amplifier-agent"] }}` on `amplifier-agent`.
+  `anthropic/claude-opus-5`), a Codex model id for `codex`.
+  Defaults to `{{ default_intelligence_models.copilot }}` on `copilot`,
+  `{{ default_intelligence_models["amplifier-agent"] }}` on `amplifier-agent`, and
+  `{{ default_intelligence_models.codex }}` on `codex`.
 - `--reasoning-effort`: one of `low`, `medium`, `high`, `xhigh`, `max`. Defaults to
-  `{{ default_intelligence_reasoning_effort }}`. Applies to the `copilot` agent provider only.
+  `{{ default_intelligence_reasoning_effort }}`. Applies to the `copilot` and `codex` agent providers.
 - `--timeout-seconds N`: the deadline for the whole run, at least 1. Defaults to 1200. It
   covers planning, downloads, installers, and waiting for Docker to start; the verification
   universe afterwards has its own 300 seconds to launch.
@@ -123,6 +124,8 @@ when Docker is already usable. The library raises `DigitalTwinUniverseError` wit
 - `gh-missing` or `gh-not-signed-in`: `copilot` needs `gh` signed in with Copilot access.
 - `model-invalid` or `amplifier-agent-unavailable`: `amplifier-agent` needs
   `<provider>/<model>` and that provider's credentials.
+- `codex-unavailable` or `codex-not-signed-in`: `codex` needs its runtime and a Codex sign-in
+  or an OpenAI API key model provider.
 - `docs-unreachable`: an official page could not be fetched, redirected away from
   docs.docker.com or learn.microsoft.com, or was not Markdown. The remedy lists the pages to
   read by hand.

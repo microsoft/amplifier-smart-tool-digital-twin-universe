@@ -1,23 +1,33 @@
 # Digital Twin Universe Smart Tool
 
-Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host.
+Stands up isolated, realistic environments from a profile using Docker Compose called a "Digital Twin Universe", or DTU. Why would you want to use this?
+- It gives your agents the optimized tools to test software in isolated and repeatable ways. Agents have to prove what they built or changed within a clean environment - the DTU.
+- Parallelism. It allows you to work on and try things completely in parallel and isolated. For example, you can run many evaluations at once, each trying something different.
+- Simulating and modeling the world. For example say we want to build an app that integrates with M365 or GitHub - we want to verify that integration with our own data easily and without hitting the real service over and over. DTUs allow you to easily override and re-route requests to a mock/simulated service running in the Compose stack.
 
-Digital Twin Universe is a [Smart Tool](https://github.com/microsoft/amplifier-smart-tools): a library with a thin CLI over it, whose model-backed capabilities sit behind an interface.
-They run through an agent provider, the [GitHub Copilot SDK](https://github.com/github/copilot-sdk) or [Amplifier Agent](https://github.com/microsoft/amplifier-agent).
+This is a [Smart Tool](https://github.com/microsoft/amplifier-smart-tools) which is a library with a thin CLI over it and model-backed capabilities sit behind an interface so many providers can be used.
+We support [GitHub Copilot SDK](https://github.com/github/copilot-sdk), [Amplifier Agent](https://github.com/microsoft/amplifier-agent), and the [OpenAI Codex SDK](https://github.com/openai/codex/tree/main/sdk/python).
 
 ## Installation
 
 Prerequisites:
-- [uv](https://docs.astral.sh/uv/getting-started/installation/).
-- [Docker](https://docs.docker.com/get-started/get-docker/), which every universe runs on.
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- [Docker](https://docs.docker.com/get-started/get-docker/)
 - For the model-backed capabilities, one of:
   - `copilot` agent provider: [GitHub CLI](https://cli.github.com/) signed in to an account with a [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites).
   - `amplifier-agent` agent provider: the model provider's credentials, for instance `OPENAI_API_KEY` for the default `openai/...` model. See [providers](https://github.com/microsoft/amplifier-agent/blob/v0.20.0/docs/providers.md).
+  - `codex` agent provider: the [Codex CLI](https://github.com/openai/codex) signed in with ChatGPT or an API key. See [authentication](https://developers.openai.com/codex/auth).
+- (Optional) Install the Smart Tools skill so your agent knows about Smart Tools: `npx skills add microsoft/amplifier-smart-tools`
 
-`digital-twin-universe install` gets Docker working: review the plan, then use `digital-twin-universe install --yes` to apply it.
+To get started:
 
 ```bash
-uv tool install "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+# Install the Agent Skill so your agent knows about it.
+npx skills add microsoft/amplifier-smart-tool-digital-twin-universe
+# Install the tool, choosing the provider(s) you want
+uv tool install "digital-twin-universe[all | copilot | amplifier-agent | codex] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+# Check setup; if it needs fixing, this plans the fix with the agent provider. Apply it with --yes.
+digital-twin-universe install
 ```
 
 To use it as a library:
@@ -26,44 +36,19 @@ To use it as a library:
 uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
 ```
 
-To run it once without installing:
-
-```bash
-uvx --from "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe" digital-twin-universe --help
-```
-
-`[all]` brings both agent providers the model-backed capabilities run through. Alternatives:
-
-```bash
-# Only the GitHub Copilot agent provider
-uv tool install "digital-twin-universe[copilot] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
-# Only the Amplifier Agent agent provider
-uv tool install "digital-twin-universe[amplifier-agent] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
-# Deterministic capabilities only
-uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
-```
-
-To teach a coding agent how to use it, install the [skill](skills/digital-twin-universe/SKILL.md):
-
-```bash
-npx skills add microsoft/amplifier-smart-tool-digital-twin-universe
-```
-
 To update:
 
 ```bash
+npx skills update digital-twin-universe   # add -g for global installs
 uv tool upgrade digital-twin-universe
-npx skills update digital-twin-universe   # add --global if the skill was installed globally
 ```
 
 To uninstall:
 
 ```bash
+npx skills remove digital-twin-universe   # add -g for global installs
 uv tool uninstall digital-twin-universe
-npx skills remove digital-twin-universe   # add --global if the skill was installed globally
 ```
-
-Verify an install with `digital-twin-universe manifest`, which needs no prerequisites and no credentials.
 
 ## Interface
 

@@ -4,8 +4,8 @@ The agent drives `digital-twin-universe` through its own shell against the real 
 tool can see its universes appear, so this test does not isolate `~/.digital-twin-universe/universes`. It asserts that nothing
 launched from its own repository is left afterwards, and touches nothing else: other universes on the machine belong
 to whoever launched them. Slow and paid: it runs once per agent provider that is installed and configured, a Copilot
-sign-in for `copilot` and OPENAI_API_KEY for the default `amplifier-agent` model, and it is marked `model` so
-`-m "not model"` deselects it.
+sign-in for `copilot`, OPENAI_API_KEY for the default `amplifier-agent` model, and a Codex sign-in for `codex`, and it
+is marked `model` so `-m "not model"` deselects it.
 """
 
 import os
@@ -16,8 +16,8 @@ import subprocess
 import pytest
 
 from digital_twin_universe import lib
-from digital_twin_universe.intelligence.interface import installed
-from digital_twin_universe.schemas import AgentProvider
+from digital_twin_universe.intelligence.interface import installed, resolve_intelligence
+from digital_twin_universe.schemas import AgentProvider, DigitalTwinUniverseError
 
 pytestmark = [pytest.mark.needs_docker, pytest.mark.live, pytest.mark.model]
 
@@ -30,6 +30,14 @@ def _signed_in() -> bool:
     return (
         shutil.which("gh") is not None and subprocess.run(["gh", "auth", "token"], capture_output=True).returncode == 0
     )
+
+
+def _codex_signed_in() -> bool:
+    try:
+        resolve_intelligence("codex").preflight()
+    except DigitalTwinUniverseError:
+        return False
+    return True
 
 
 def _from(repository: Path) -> list[str]:
@@ -51,6 +59,10 @@ def _from(repository: Path) -> list[str]:
                 not installed("amplifier-agent") or not os.environ.get("OPENAI_API_KEY"),
                 reason="needs the amplifier-agent extra and OPENAI_API_KEY",
             ),
+        ),
+        pytest.param(
+            "codex",
+            marks=pytest.mark.skipif(not _codex_signed_in(), reason="needs the codex extra and a Codex sign-in"),
         ),
     ],
 )

@@ -16,6 +16,7 @@ from typer.models import CommandFunctionType
 
 from digital_twin_universe import lib
 from digital_twin_universe.adapters import mcp as mcp_adapter
+from digital_twin_universe.core.skill import DISTRIBUTION
 from digital_twin_universe.schemas import (
     DEFAULT_INTELLIGENCE_MODELS,
     DEFAULT_INTELLIGENCE_REASONING_EFFORT,
@@ -25,16 +26,19 @@ from digital_twin_universe.schemas import (
 )
 
 AGENT_PROVIDER_HELP = (
-    "What the model-backed work runs through: copilot (GitHub Copilot, signed in as the GitHub CLI's user) or "
-    "amplifier-agent (Amplifier Agent, with the model provider's credentials). The first installed, in that order, "
-    "when omitted."
+    "What the model-backed work runs through: copilot (GitHub Copilot, signed in as the GitHub CLI's user), "
+    "amplifier-agent (Amplifier Agent, with the model provider's credentials), or codex (OpenAI Codex, with the "
+    "Codex sign-in). The first installed, in that order, when omitted."
 )
-REASONING_EFFORT_NOTE = "Applies to the copilot agent provider only."
+REASONING_EFFORT_NOTE = "Applies to the copilot and codex agent providers."
 
 
 def _model_help(defaults: dict[AgentProvider, str]) -> str:
     named = "; ".join(f"{agent_provider}: {model}" for agent_provider, model in defaults.items())
-    return f"A Copilot model id for copilot, <provider>/<model> for amplifier-agent. Defaults to {named}."
+    return (
+        "A Copilot model id for copilot, <provider>/<model> for amplifier-agent, a Codex model id for codex. "
+        f"Defaults to {named}."
+    )
 
 
 class CapabilityCommand(TyperCommand):
@@ -102,8 +106,18 @@ def _print_skill(value: bool) -> None:
         raise typer.Exit()
 
 
+def _print_version(value: bool) -> None:
+    if value:
+        typer.echo(f"{DISTRIBUTION} {lib.version()}")
+        raise typer.Exit()
+
+
 @app.callback()
 def cli(
+    version: Annotated[
+        bool,
+        typer.Option("--version", "-V", is_eager=True, callback=_print_version, help="Print the version and exit."),
+    ] = False,
     help: Annotated[
         bool,
         typer.Option(
