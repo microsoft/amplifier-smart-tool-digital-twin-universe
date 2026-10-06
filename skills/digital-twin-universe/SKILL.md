@@ -5,7 +5,7 @@ description: >-
 license: MIT
 metadata:
   author: DavidKoleczek
-  version: "0.5.1"
+  version: "0.5.2"
   repository: https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
 ---
 
