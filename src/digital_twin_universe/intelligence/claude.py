@@ -10,11 +10,7 @@ from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ResultMessage
 
 from digital_twin_universe.intelligence.interface import state_directory
 from digital_twin_universe.intelligence.schemas import AgentRequest, AgentResult
-from digital_twin_universe.intelligence.submission import (
-    MAX_INVALID_SUBMISSIONS,
-    reanswer_prompt,
-    submission_problem,
-)
+from digital_twin_universe.intelligence.submission import MAX_INVALID_SUBMISSIONS, reanswer_prompt, submission_problem
 from digital_twin_universe.schemas import DigitalTwinUniverseError
 
 AUTHENTICATION_DOCUMENTATION = "https://code.claude.com/docs/en/agent-sdk/quickstart"

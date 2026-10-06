@@ -299,7 +299,9 @@ def test_preflight_names_every_documented_way_to_authenticate_when_there_are_no_
     assert adapter.AUTHENTICATION_DOCUMENTATION in failure.value.remedy
 
 
-def test_preflight_names_the_runtime_when_it_cannot_start(world: Callable[..., FakeWorld], monkeypatch: pytest.MonkeyPatch) -> None:
+def test_preflight_names_the_runtime_when_it_cannot_start(
+    world: Callable[..., FakeWorld], monkeypatch: pytest.MonkeyPatch
+) -> None:
     class Unstartable:
         def __init__(self, options: ClaudeAgentOptions) -> None:
             pass
