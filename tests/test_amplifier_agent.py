@@ -24,6 +24,7 @@ from amplifier_agent import (
 )
 
 from digital_twin_universe.intelligence import amplifier_agent as adapter
+from digital_twin_universe.intelligence import interface
 from digital_twin_universe.intelligence.amplifier_agent import AmplifierAgentIntelligence, parse_model
 from digital_twin_universe.intelligence.schemas import AgentRequest, HostWorkspace
 from digital_twin_universe.intelligence.submission import MAX_INVALID_SUBMISSIONS, SUBMIT_TOOL, resubmit_prompt
@@ -363,7 +364,7 @@ def test_preflight_starts_and_closes_an_agent_without_tools_and_names_the_remedy
 def test_sessions_live_in_the_platform_state_directory_under_the_tool(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(adapter.sys, "platform", "linux")
+    monkeypatch.setattr(interface.sys, "platform", "linux")
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
 
-    assert adapter.storage_directory() == tmp_path / "digital-twin-universe" / "amplifier-agent"
+    assert interface.state_directory("amplifier-agent") == tmp_path / "digital-twin-universe" / "amplifier-agent"

@@ -12,7 +12,7 @@ from openai_codex import ApprovalMode, AsyncCodex, AsyncThread, Sandbox, TurnRes
 from openai_codex.types import GetAccountResponse, ReasoningEffort, TurnStatus
 
 from digital_twin_universe.intelligence.schemas import AgentRequest, AgentResult
-from digital_twin_universe.intelligence.submission import MAX_INVALID_SUBMISSIONS, submission_problem
+from digital_twin_universe.intelligence.submission import MAX_INVALID_SUBMISSIONS, reanswer_prompt, submission_problem
 from digital_twin_universe.schemas import DigitalTwinUniverseError
 
 SIGN_IN_DOCUMENTATION = "https://developers.openai.com/codex/auth"
@@ -142,11 +142,6 @@ def parse_answer(text: str | None, schema: dict[str, Any]) -> tuple[dict[str, An
     answer = without_added_nulls(answer, schema, schema)
     problem = submission_problem(answer, schema)
     return (answer, None) if problem is None else (None, problem)
-
-
-def reanswer_prompt(problem: str) -> str:
-    """What the agent is told when its final message was not an acceptable answer."""
-    return f"Your answer was not accepted: {problem}. Answer again with one JSON object matching the schema."
 
 
 def to_strict(schema: dict[str, Any]) -> dict[str, Any]:

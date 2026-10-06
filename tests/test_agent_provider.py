@@ -41,13 +41,16 @@ def only_installed(monkeypatch: pytest.MonkeyPatch, *agent_providers: AgentProvi
 @pytest.mark.parametrize(
     ("installed", "named", "picked"),
     [
-        (("copilot", "amplifier-agent", "codex"), None, "copilot"),
+        (("copilot", "amplifier-agent", "codex", "claude"), None, "copilot"),
         (("copilot",), None, "copilot"),
         (("amplifier-agent",), None, "amplifier-agent"),
         (("codex",), None, "codex"),
         (("amplifier-agent", "codex"), None, "amplifier-agent"),
+        (("claude",), None, "claude"),
+        (("codex", "claude"), None, "codex"),
         (("copilot", "amplifier-agent"), "amplifier-agent", "amplifier-agent"),
         (("copilot", "amplifier-agent", "codex"), "codex", "codex"),
+        (("copilot", "amplifier-agent", "codex", "claude"), "claude", "claude"),
     ],
 )
 def test_a_named_agent_provider_wins_and_otherwise_the_first_installed_is_picked(
@@ -64,10 +67,11 @@ def test_a_named_agent_provider_wins_and_otherwise_the_first_installed_is_picked
 @pytest.mark.parametrize(
     ("named", "code", "extras"),
     [
-        (None, "no-agent-provider", ["all", "copilot", "amplifier-agent", "codex"]),
+        (None, "no-agent-provider", ["all", "copilot", "amplifier-agent", "codex", "claude"]),
         ("copilot", "agent-provider-not-installed", ["copilot"]),
         ("amplifier-agent", "agent-provider-not-installed", ["amplifier-agent"]),
         ("codex", "agent-provider-not-installed", ["codex"]),
+        ("claude", "agent-provider-not-installed", ["claude"]),
     ],
 )
 def test_a_missing_agent_provider_names_the_install_command(
@@ -102,11 +106,11 @@ def test_an_injected_intelligence_wins_and_needs_no_agent_provider_installed(mon
     )
 
 
-@pytest.mark.parametrize("agent_provider", ["copilot", "amplifier-agent", "codex"])
+@pytest.mark.parametrize("agent_provider", ["copilot", "amplifier-agent", "codex", "claude"])
 def test_without_an_injected_intelligence_the_agent_providers_default_model_is_asked_for(
     monkeypatch: pytest.MonkeyPatch, agent_provider: AgentProvider
 ) -> None:
-    only_installed(monkeypatch, "copilot", "amplifier-agent", "codex")
+    only_installed(monkeypatch, "copilot", "amplifier-agent", "codex", "claude")
     fake = FakeIntelligence()
     resolved: list[tuple[AgentProvider | None, str | None]] = []
 

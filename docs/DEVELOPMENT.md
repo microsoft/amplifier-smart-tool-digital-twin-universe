@@ -14,6 +14,7 @@ Install:
 - [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites) for intelligent features through the `copilot` agent provider.
 - [Model provider credentials](https://github.com/microsoft/amplifier-agent/blob/v0.20.0/docs/providers.md), such as `OPENAI_API_KEY`, for intelligent features through the `amplifier-agent` agent provider.
 - [Codex CLI](https://github.com/openai/codex) [signed in](https://developers.openai.com/codex/auth) with ChatGPT or an API key, for intelligent features through the `codex` agent provider.
+- [`ANTHROPIC_API_KEY` or a cloud provider's credentials](https://code.claude.com/docs/en/agent-sdk/quickstart), for intelligent features through the `claude` agent provider.
 
 ### Initial Setup
 
@@ -100,7 +101,7 @@ Each worker hands out host ports from its own range (`free_port` in `tests/conft
 Run the deterministic capabilities on an install without any agent provider, then restore the full environment:
 
 ```bash
-uv sync --no-extra copilot --no-extra amplifier-agent --no-extra codex
+uv sync --no-extra copilot --no-extra amplifier-agent --no-extra codex --no-extra claude
 uv run digital-twin-universe manifest
 uv run pytest -m "not model and not live"
 uv sync --all-extras --all-groups
