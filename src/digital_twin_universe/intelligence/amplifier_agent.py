@@ -1,12 +1,10 @@
 """Amplifier Agent implementation of the intelligence interface."""
 
 import asyncio
-import contextlib
 from importlib.metadata import version
 import json
 from pathlib import Path
 import tempfile
-import threading
 import time
 from typing import Any
 
@@ -38,7 +36,7 @@ from digital_twin_universe.schemas import DEFAULT_INTELLIGENCE_MODELS, DigitalTw
 
 READ_ONLY_TOOLS = ["read_file", "glob", "grep", "bash"]
 WRITE_TOOLS = ["write_file", "edit_file"]
-PROVIDERS_DOCUMENTATION = "https://github.com/microsoft/amplifier-agent/blob/v0.20.0/docs/providers.md"
+PROVIDERS_DOCUMENTATION = "https://github.com/microsoft/amplifier-agent/blob/v0.22.0/docs/providers.md"
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 # The runtime rejects arguments that break a tool's declared schema before the handler runs, and ends the turn.
 # Declaring any object and validating in the handler turns a bad submission into a failure the model can retry.
@@ -46,10 +44,6 @@ PERMISSIVE_SCHEMA: dict[str, Any] = {"$schema": JSON_SCHEMA_DIALECT, "type": "ob
 SUBMIT_DESCRIPTION = """Submit your final answer. Call it exactly once, when you are done.
 The arguments must be one JSON object matching this JSON schema:
 {{ schema }}"""
-
-# create_agent captures the process's working directory for every built-in tool, so the chdir that points it at
-# a workspace has to be exclusive across the threads running agents side by side.
-WORKING_DIRECTORY_LOCK = threading.Lock()
 
 
 class AmplifierAgentIntelligence:
@@ -111,11 +105,11 @@ class AmplifierAgentIntelligence:
         options = AgentOptions(
             provider=provider,
             model=model,
+            reasoning_effort=request.reasoning_effort,
             tools=tools,
-            storage=state_directory("amplifier-agent"),
+            working_directory=directory,
+            sessions_directory=state_directory("amplifier-agent"),
             approvals="allow",
-            # The default, "stop", ends the turn on any failed tool call, including a rejected submission.
-            tool_error_policy="continue",
         )
         deadline = time.monotonic() + request.timeout_seconds
         timed_out = f"The agent did not finish within {request.timeout_seconds} seconds."
@@ -123,7 +117,7 @@ class AmplifierAgentIntelligence:
         session_id: str | None = None
         try:
             async with (
-                await create_agent_in(options, directory) as agent,
+                await create_agent(options) as agent,
                 await _session(agent, request.resume) as session,
             ):
                 session_id = session.info.session_id
@@ -177,12 +171,6 @@ def describe(error: AgentError) -> str:
     return f"{error.code}: {error.message} {error.remedy}"
 
 
-async def create_agent_in(options: AgentOptions, directory: Path) -> Agent:
-    """An agent whose built-in tools work in `directory`, leaving the process's working directory as it was."""
-    with WORKING_DIRECTORY_LOCK, contextlib.chdir(directory):
-        return await create_agent(options)
-
-
 async def run_turn(session: Session, prompt: str, timeout: float) -> TurnResult | None:
     """The turn's result, or None when it ran out of time and was cancelled."""
     turn = await session.start_turn(TurnInput(content=[TextPart(text=prompt)]))
@@ -209,6 +197,6 @@ async def _session(agent: Agent, resume: str | None) -> Session:
 
 async def _probe(provider: str, model: str) -> None:
     agent = await create_agent(
-        AgentOptions(provider=provider, model=model, tools=[], storage=state_directory("amplifier-agent"))
+        AgentOptions(provider=provider, model=model, tools=[], sessions_directory=state_directory("amplifier-agent"))
     )
     await agent.close()

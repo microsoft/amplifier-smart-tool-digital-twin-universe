@@ -70,7 +70,7 @@ class FakeTurn:
 
 class FakeSession:
     def __init__(self, world: "FakeWorld", session_id: str) -> None:
-        self.info = SessionRecord(session_id=session_id, persistence="durable")
+        self.info = SessionRecord(session_id=session_id, persistence="durable", provider="openai", model="gpt-6-sol")
         self._world = world
 
     async def start_turn(self, input: TurnInput) -> FakeTurn:
@@ -120,7 +120,6 @@ class FakeWorld:
         self.error = error
         self.options: list[AgentOptions] = []
         self.directories: list[Path] = []
-        self.locked: list[bool] = []
         self.prompts: list[str] = []
         self.turns: list[FakeTurn] = []
         self.resumed: list[str] = []
@@ -129,8 +128,7 @@ class FakeWorld:
 
     async def create_agent(self, options: AgentOptions) -> FakeAgent:
         self.options.append(options)
-        self.directories.append(Path.cwd())
-        self.locked.append(adapter.WORKING_DIRECTORY_LOCK.locked())
+        self.directories.append(Path(str(options.working_directory)))
         self.tools = {tool.name: tool for tool in options.tools or [] if isinstance(tool, Tool)}
         if self.error is not None:
             raise self.error
@@ -219,7 +217,7 @@ def test_a_plain_completion_has_no_tools_and_never_sees_the_callers_directory(
     assert Path.cwd() == caller
 
 
-def test_a_workspace_run_is_read_only_unless_writable_and_restores_the_directory(
+def test_a_workspace_run_is_read_only_unless_writable_and_works_in_the_workspace(
     world: Callable[..., FakeWorld], tmp_path: Path
 ) -> None:
     fake = world(answers(success("read")), answers(success("wrote")))
@@ -234,13 +232,11 @@ def test_a_workspace_run_is_read_only_unless_writable_and_restores_the_directory
         ["read_file", "glob", "grep", "bash", "write_file", "edit_file"],
     ]
     assert fake.directories == [tmp_path, tmp_path]
-    assert fake.locked == [True, True]
     assert Path.cwd() == caller
-    assert not adapter.WORKING_DIRECTORY_LOCK.locked()
     for options in fake.options:
         assert options.approvals == "allow"
-        assert options.tool_error_policy == "continue"
-        assert Path(str(options.storage)).is_absolute()
+        assert options.reasoning_effort == request(tmp_path).reasoning_effort
+        assert Path(str(options.sessions_directory)).is_absolute()
         assert not {"web_fetch", "web_search", "delegate"} & {str(tool) for tool in options.tools or []}
 
 

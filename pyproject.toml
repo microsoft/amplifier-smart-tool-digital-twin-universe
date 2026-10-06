@@ -31,7 +31,7 @@ copilot = [
     "github-copilot-sdk>=1.0.7,<2.0.0",
 ]
 amplifier-agent = [
-    "amplifier-agent @ git+https://github.com/microsoft/amplifier-agent@v0.20.0#subdirectory=packages/python",
+    "amplifier-agent @ git+https://github.com/microsoft/amplifier-agent@v0.22.0#subdirectory=packages/python",
 ]
 codex = [
     "openai-codex>=0.159.2,<1.0.0",

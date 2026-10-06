@@ -12,7 +12,7 @@ Install:
 - [GitHub CLI](https://cli.github.com/) for intelligence features through the `copilot` agent provider.
 - [Node.js](https://nodejs.org/) 22+ and [pnpm](https://pnpm.io/installation), optional: only to change the dashboard's frontend. The compiled dashboard is committed, so running it needs neither.
 - [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites) for intelligent features through the `copilot` agent provider.
-- [Model provider credentials](https://github.com/microsoft/amplifier-agent/blob/v0.20.0/docs/providers.md), such as `OPENAI_API_KEY`, for intelligent features through the `amplifier-agent` agent provider.
+- [Model provider credentials](https://github.com/microsoft/amplifier-agent/blob/v0.22.0/docs/providers.md), such as `OPENAI_API_KEY`, for intelligent features through the `amplifier-agent` agent provider.
 - [Codex CLI](https://github.com/openai/codex) [signed in](https://developers.openai.com/codex/auth) with ChatGPT or an API key, for intelligent features through the `codex` agent provider.
 - [`ANTHROPIC_API_KEY` or a cloud provider's credentials](https://code.claude.com/docs/en/agent-sdk/quickstart), for intelligent features through the `claude` agent provider.
 
