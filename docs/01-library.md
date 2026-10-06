@@ -166,9 +166,10 @@ Raises `profile-not-found` and `docker-unavailable`.
 
 A universe is one Compose project. Its `id` is the project's name, `dtu-<profile name>-<4 hex>`, so `docker compose -p <id> logs` reaches the same stack by hand and `list` can tell two launches of one profile apart.
 
-What the tool renders for a universe lives in its state directory, `~/.digital-twin-universe/universes/<id>/`: `dtu.yaml`, the overlay, `overlay/`, the files it refers to, including the certificate authority the gateway minted, and `universe.json`, the record: id, name, description, profile path, twin, and creation time. Everything else about a universe is in Docker.
+What the tool renders for a universe lives in its state directory, `~/.digital-twin-universe/universes/<id>/`: `dtu.yaml`, the overlay, `overlay/`, the files it refers to, including the certificate authority the gateway minted, `bake.yaml`, the stack as Compose resolved it, which Buildx builds the gateway's builds from, and `universe.json`, the record: id, name, description, profile path, twin, and creation time. Everything else about a universe is in Docker.
 
 A profile that serves nothing and rewrites nothing renders no overlay at all, so `dtu.yaml` is absent and the universe is exactly the profile.
+By hand, a universe with the gateway and a build runs as `docker buildx bake --allow=network.host --allow=fs.read=<dir> --load -f bake.yaml`, with one `fs.read` per build context and for `overlay/`, then `docker compose -p <id> -f <profile> -f dtu.yaml up --no-build`. Compose cannot build these itself: it never grants a build the host network, which Buildx 0.37.2 and later require.
 The record is how an id leads back to a universe: every capability that takes an `id` reads it first and raises `universe-not-found` when it is missing. A stack whose directory was deleted by hand is no longer a universe to the tool; `docker compose -p <id> down --volumes` clears it.
 
 Every capability that acts on a universe returns a `Universe`: the record above, plus `state`, its `services` as Compose reports them (state, health, image), and `urls`, the twin's published ports as the host reaches them: `http://localhost:<host port>/` for each, or the host, path, and label `x-dtu.urls` gives that container port. The entries are kept in the record, so `status` and `list` report them without rereading the profile. A `host` other than `localhost` is reported as written; whether it resolves is the client's business, and the profile reference says which clients honor `*.localhost`.
@@ -185,6 +186,7 @@ def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe
 
 Validates the profile and stops on any error, before anything is recorded or started. Assigns an id, renders the overlay, then brings the stack up in the order it needs: the `git` and `gateway` services first when the profile calls for them, then the certificate authority is taken out to the host, then everything else, building with the gateway reachable. Returns when every healthcheck passes.
 That is `docker compose -p <id> -f <profile> -f <overlay> up --build --wait`, once per pass; Compose's progress is passed through to stderr.
+With the gateway present and Buildx installed, the images are built first with `docker buildx bake --allow=network.host`, since Compose cannot grant a build the host network, and the last pass is `up --no-build --wait`; Bake's progress goes to stderr too.
 
 When something fails after containers have started, they are left running so `doctor` and `docker compose logs` have something to read. `destroy` clears them; every failure's remedy names the command.
 

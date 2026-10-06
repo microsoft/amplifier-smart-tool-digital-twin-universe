@@ -114,7 +114,7 @@ digital-twin-universe mcp
 ```
 
 - Every result is one JSON document on stdout. Failures carry a stable `code` and a `remedy`.
-- Nothing is hidden. The profile is a Compose file and the rendered overlay is a Compose file. Both can be read, and both can be run with `docker compose` by hand.
+- Nothing is hidden. The profile is a Compose file and the rendered overlay is a Compose file. Both can be read, and both can be run with `docker compose` by hand, after `docker buildx bake` for images built through the gateway.
 
 ## Non-Goals
 

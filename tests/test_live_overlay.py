@@ -267,6 +267,20 @@ def test_a_served_repository_clones_during_the_image_build(
     assert built.stdout == MARKER
 
 
+def test_a_build_that_fails_through_the_gateway_is_named_and_left_for_inspection(
+    profile_directory: Path, launch_universe: Launch, served_repository: Path
+) -> None:
+    dockerfile = TWIN_DOCKERFILE + "RUN echo dtu-build-broke && false\n"
+    profile = _profile(profile_directory, SERVED.format(repository=served_repository, url=SERVED_URL), dockerfile)
+
+    with pytest.raises(DigitalTwinUniverseError) as failed:
+        launch_universe(profile)
+
+    assert failed.value.code == "build-failed"
+    assert "dtu-build-broke" in failed.value.message
+    assert "for inspection" in failed.value.remedy
+
+
 def test_a_near_miss_url_is_not_rewritten(
     profile_directory: Path, launch_universe: Launch, served_repository: Path, needs_internet: None
 ) -> None:
