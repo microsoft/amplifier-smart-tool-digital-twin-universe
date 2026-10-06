@@ -1,7 +1,7 @@
 ---
 smart_tool_format: 1
 name: digital-twin-universe
-version: 0.4.0
+version: 0.5.0
 description: >-
   Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed
 use_cases:
@@ -45,6 +45,11 @@ requires:
       Without it, the model-backed capabilities cannot run through codex.
     optional: true
     install: https://developers.openai.com/codex/auth
+  - name: claude-credentials
+    purpose: >-
+      ANTHROPIC_API_KEY, or any of its other supported modes of [authentication](https://code.claude.com/docs/en/agent-sdk/quickstart)
+    optional: true
+    install: https://code.claude.com/docs/en/agent-sdk/quickstart
 ---
 
 Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed.
@@ -144,6 +149,8 @@ uv tool install "digital-twin-universe[copilot] @ git+https://github.com/microso
 uv tool install "digital-twin-universe[amplifier-agent] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
 # Only the Codex agent provider
 uv tool install "digital-twin-universe[codex] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+# Only the Claude agent provider
+uv tool install "digital-twin-universe[claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
 # Deterministic capabilities only
 uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
 ```
@@ -172,7 +179,7 @@ remains. No step prompts on stdin. Partial installation is reported, not rolled 
 
 Deterministic capabilities need only `uv` and Docker. Model-backed capabilities run through an agent
 provider, picked with `--agent-provider`, or the first installed of `copilot`,
-`amplifier-agent`, and `codex` when omitted:
+`amplifier-agent`, `codex`, and `claude` when omitted:
 
 - `copilot`: GitHub Copilot, signed in as the GitHub CLI's user. `gh` must be installed and
   `gh auth login` completed with an account that has a Copilot subscription.
@@ -183,6 +190,10 @@ provider, picked with `--agent-provider`, or the first installed of `copilot`,
 - `codex`: [OpenAI Codex](https://github.com/openai/codex), with the user's Codex configuration.
   The Codex CLI must be signed in with ChatGPT or an API key, see
   [authentication](https://developers.openai.com/codex/auth).
+- `claude`: the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-python), with the
+  user's Claude Code settings. Needs `ANTHROPIC_API_KEY`, or Amazon Bedrock, Claude Platform on AWS,
+  Google Cloud's Agent Platform, or Microsoft Foundry credentials, see
+  [authentication](https://code.claude.com/docs/en/agent-sdk/quickstart).
 
 Without an agent provider installed and configured, a model-backed capability fails immediately
 and names what to install or configure; it never falls back to a deterministic answer.
@@ -193,7 +204,7 @@ Windows a profile can opt into Windows containers.
 ## Straight and smart paths
 
 Deterministic capabilities run with no provider configured. Model-backed capabilities go
-through GitHub Copilot, Amplifier Agent, or Codex, whichever `--agent-provider` names, and say so in
+through GitHub Copilot, Amplifier Agent, Codex, or Claude, whichever `--agent-provider` names, and say so in
 their help text.
 
 ## Output and failure contract

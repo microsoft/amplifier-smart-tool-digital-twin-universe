@@ -84,12 +84,14 @@ goes on and the result's `notes` say what was missing.
   first installed, in that order, when omitted.
 - `--model`: the model that writes the profile: a Copilot model id for `copilot`,
   `<provider>/<model>` for `amplifier-agent` (for instance `anthropic/claude-opus-5`), a
-  Codex model id for `codex`.
+  Codex model id for `codex`, a Claude model id for `claude`.
   Defaults to `{{ default_intelligence_models.copilot }}` on `copilot`,
-  `{{ default_intelligence_models["amplifier-agent"] }}` on `amplifier-agent`, and
-  `{{ default_intelligence_models.codex }}` on `codex`.
+  `{{ default_intelligence_models["amplifier-agent"] }}` on `amplifier-agent`,
+  `{{ default_intelligence_models.codex }}` on `codex`, and
+  `{{ default_intelligence_models.claude }}` on `claude`.
 - `--reasoning-effort`: one of `low`, `medium`, `high`, `xhigh`, `max`. Defaults to
-  `{{ default_intelligence_reasoning_effort }}`. Applies to the `copilot` and `codex` agent providers.
+  `{{ default_intelligence_reasoning_effort }}`. Applies to the `copilot`, `codex`, and `claude`
+  agent providers.
 - `--timeout-seconds N`: the deadline for the whole run, at least 1. Defaults to 1800. A
   launch that builds images takes minutes, so leave room for several.
 - `intelligence`, library only: the `Intelligence` implementation the agent runs through,
@@ -142,6 +144,8 @@ Anything else prints `message` and `remedy` to stderr and exits 1. The library r
   `<provider>/<model>` and that provider's credentials.
 - `codex-unavailable` or `codex-not-signed-in`: `codex` needs its runtime and a Codex sign-in
   or an OpenAI API key model provider.
+- `claude-unavailable` or `claude-not-signed-in`: `claude` needs its runtime and
+  `ANTHROPIC_API_KEY` or a cloud provider's credentials.
 - `profile-rejected`: the agent's submission was unusable even after a correction.
 - `create-timeout`: the deadline passed. The tool's universe is destroyed, the message
   carries the report so far, and the draft stays.

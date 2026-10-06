@@ -36,7 +36,7 @@ digital-twin-universe check
 ## digital-twin-universe install
 
 ```bash
-digital-twin-universe install [--yes] [--accept-license] [--agent-provider copilot|amplifier-agent|codex] [--model MODEL]
+digital-twin-universe install [--yes] [--accept-license] [--agent-provider copilot|amplifier-agent|codex|claude] [--model MODEL]
                  [--reasoning-effort low] [--timeout-seconds 1200]
 ```
 
@@ -47,7 +47,7 @@ digital-twin-universe install [--yes] [--accept-license] [--agent-provider copil
 ```bash
 digital-twin-universe create-profile --description "a FastAPI app on port 8000 using Postgres" [--project .] [--name web-app]
                         [--no-verify] [--keep] [--overwrite] [--max-attempts 3]
-                        [--agent-provider copilot|amplifier-agent|codex] [--model MODEL]
+                        [--agent-provider copilot|amplifier-agent|codex|claude] [--model MODEL]
                         [--reasoning-effort low] [--timeout-seconds 1800]
 ```
 

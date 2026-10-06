@@ -1,6 +1,9 @@
 """The contract every model-backed capability runs through, so the implementation is swappable."""
 
 from importlib.util import find_spec
+import os
+from pathlib import Path
+import sys
 from typing import Protocol
 
 from digital_twin_universe.core.skill import DISTRIBUTION, repository_url
@@ -12,6 +15,7 @@ SDK_MODULES: dict[AgentProvider, str] = {
     "copilot": "copilot",
     "amplifier-agent": "amplifier_agent",
     "codex": "openai_codex",
+    "claude": "claude_agent_sdk",
 }
 
 
@@ -80,6 +84,10 @@ def resolve_intelligence(agent_provider: AgentProvider | None = None, model: str
             from digital_twin_universe.intelligence.codex import CodexIntelligence
 
             return CodexIntelligence()
+        case "claude":
+            from digital_twin_universe.intelligence.claude import ClaudeIntelligence
+
+            return ClaudeIntelligence()
 
 
 def select_intelligence(
@@ -99,6 +107,17 @@ def select_intelligence(
         model = default_models[agent_provider] if model is None else model
         return resolve_intelligence(agent_provider, model), model
     return intelligence, default_models[agent_provider or AGENT_PROVIDERS[0]] if model is None else model
+
+
+def state_directory(agent_provider: AgentProvider) -> Path:
+    """The platform's per-user state location for the agent provider, where what a later run resumes lives."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    return base / DISTRIBUTION / agent_provider
 
 
 def _install_source(extra: str) -> str:

@@ -15,15 +15,9 @@ from openai_codex import ApprovalMode, Sandbox, TurnResult
 from openai_codex.types import GetAccountResponse, TurnError, TurnStatus
 
 from digital_twin_universe.intelligence import codex as adapter
-from digital_twin_universe.intelligence.codex import (
-    CodexIntelligence,
-    parse_answer,
-    reanswer_prompt,
-    to_strict,
-    without_added_nulls,
-)
+from digital_twin_universe.intelligence.codex import CodexIntelligence, parse_answer, to_strict, without_added_nulls
 from digital_twin_universe.intelligence.schemas import AgentRequest, HostWorkspace
-from digital_twin_universe.intelligence.submission import MAX_INVALID_SUBMISSIONS
+from digital_twin_universe.intelligence.submission import MAX_INVALID_SUBMISSIONS, reanswer_prompt
 from digital_twin_universe.schemas import DigitalTwinUniverseError
 
 SESSION = "fake-thread"
@@ -326,7 +320,10 @@ def test_an_answer_with_nulls_for_optional_properties_validates_against_the_orig
     "account",
     [
         GetAccountResponse.model_validate(
-            {"account": {"type": "chatgpt", "email": "user@example.com", "planType": "plus"}, "requiresOpenaiAuth": True}
+            {
+                "account": {"type": "chatgpt", "email": "user@example.com", "planType": "plus"},
+                "requiresOpenaiAuth": True,
+            }
         ),
         GetAccountResponse.model_validate({"account": None, "requiresOpenaiAuth": False}),
     ],

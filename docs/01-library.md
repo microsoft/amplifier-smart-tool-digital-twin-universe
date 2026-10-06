@@ -50,7 +50,7 @@ Get Docker working on this host. Model-backed, except that when `check()` alread
 def install(
     apply: bool = False,            # run the unattended steps; otherwise only plan
     accept_license: bool = False,   # allow --accept-license in Docker Desktop's installer
-    agent_provider: AgentProvider | None = None,  # copilot, amplifier-agent, or codex; the first installed when None
+    agent_provider: AgentProvider | None = None,  # copilot, amplifier-agent, codex, or claude; the first installed when None
     model: str | None = None,       # the agent provider's default in DEFAULT_INTELLIGENCE_MODELS when None
     reasoning_effort: ReasoningEffort = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     timeout_seconds: int = 1200,    # the whole run; Desktop downloads are large and daemon start is polled
@@ -74,7 +74,7 @@ failed           apply; a step failed after the repair round, or the universe di
 
 Every step in `InstallReport.steps` keeps its status and, when it failed, the last lines of its output in `reason`. `next` is exactly one instruction for the person. `notes` carries what the plan wants said: license terms, deviations from the docs such as `-y`, the docker group's privileges.
 
-Raises `docs-unreachable` (with the pages to read by hand), `plan-rejected`, `install-timeout` (with the report so far), `no-agent-provider` and `agent-provider-not-installed` (with the command that installs one), and the intelligence preflight codes: `gh-missing` and `gh-not-signed-in` for `copilot`, `model-invalid` and `amplifier-agent-unavailable` for `amplifier-agent`, `codex-unavailable` and `codex-not-signed-in` for `codex`.
+Raises `docs-unreachable` (with the pages to read by hand), `plan-rejected`, `install-timeout` (with the report so far), `no-agent-provider` and `agent-provider-not-installed` (with the command that installs one), and the intelligence preflight codes: `gh-missing` and `gh-not-signed-in` for `copilot`, `model-invalid` and `amplifier-agent-unavailable` for `amplifier-agent`, `codex-unavailable` and `codex-not-signed-in` for `codex`, `claude-unavailable` and `claude-not-signed-in` for `claude`.
 
 ## Create profile
 
@@ -89,7 +89,7 @@ def create_profile(
     keep: bool = False,                      # leave the tool's verified universe running and report it; needs verify
     overwrite: bool = False,                 # replace an existing <name>/
     max_attempts: int = 3,                   # submissions the tool will consider; the agent iterates within each
-    agent_provider: AgentProvider | None = None,  # copilot, amplifier-agent, or codex; the first installed when None
+    agent_provider: AgentProvider | None = None,  # copilot, amplifier-agent, codex, or claude; the first installed when None
     model: str | None = None,                # the agent provider's default in DEFAULT_INTELLIGENCE_MODELS when None
     reasoning_effort: ReasoningEffort = DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     timeout_seconds: int = 1800,             # the whole run; a launch with builds is minutes
@@ -325,13 +325,14 @@ class Intelligence(Protocol):
 `preflight` raises `DigitalTwinUniverseError` naming what to configure when the implementation cannot run.
 `run` executes one agent: `AgentRequest` holds the prompt, model, optional workspace, and optional output schema; `AgentResult` holds the text, structured output, or error.
 Setting `AgentRequest.resume` to an earlier `AgentResult.session_id` continues that session instead of starting a fresh one, so the agent keeps what it learned.
-A request with a `workspace` gives the agent tools to read and search files and run commands in that directory on this host, and to write files too when `writable`: `view`, `grep`, and `bash`, plus `edit` and `write`, on `copilot`; `read_file`, `glob`, `grep`, and `bash`, plus `write_file` and `edit_file`, on `amplifier-agent`; Codex's own shell and file editing on `codex`, whether or not `writable`. `bash` is not sandboxed to the workspace: what bounds the agent is the caller's prompt, and the caller validates everything the agent produced before any of it is kept, the way `create_profile` checks that every file lies in the draft and launches the draft itself.
+A request with a `workspace` gives the agent tools to read and search files and run commands in that directory on this host, and to write files too when `writable`: `view`, `grep`, and `bash`, plus `edit` and `write`, on `copilot`; `read_file`, `glob`, `grep`, and `bash`, plus `write_file` and `edit_file`, on `amplifier-agent`; Codex's own shell and file editing on `codex`, whether or not `writable`; `Read`, `Glob`, `Grep`, and `Bash`, plus `Edit` and `Write`, on `claude`. `bash` is not sandboxed to the workspace: what bounds the agent is the caller's prompt, and the caller validates everything the agent produced before any of it is kept, the way `create_profile` checks that every file lies in the draft and launches the draft itself.
 
 `resolve_intelligence(agent_provider)` returns a shipped implementation, one per agent provider, each installed through the extra of the same name:
 
 - `copilot`: `CopilotIntelligence`, built on the [GitHub Copilot SDK](https://github.com/github/copilot-sdk) and signed in through the GitHub CLI.
 - `amplifier-agent`: `AmplifierAgentIntelligence`, built on [Amplifier Agent](https://github.com/microsoft/amplifier-agent). The model is `<provider>/<model>`, and `reasoning_effort` is ignored. Sessions live under the platform's per-user state directory, in `digital-twin-universe/amplifier-agent`.
 - `codex`: `CodexIntelligence`, built on the [OpenAI Codex SDK](https://github.com/openai/codex/tree/main/sdk/python) and run with the user's Codex sign-in and `~/.codex/config.toml`. A session is a Codex thread, kept where Codex keeps its threads. An output schema is enforced by the model API in its strict form, every property required and an optional one nullable; the nulls are dropped before the answer is checked against the original schema.
+- `claude`: `ClaudeIntelligence`, built on the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-python) and run with the user's Claude Code settings and the credentials Claude Code resolves: `ANTHROPIC_API_KEY`, or a cloud provider's, as [its docs](https://code.claude.com/docs/en/agent-sdk/quickstart) describe. Sessions are kept where Claude Code keeps them; a plain completion runs in the platform's per-user state directory, in `digital-twin-universe/claude`.
 
 Without an agent provider named, the first installed in that order is used; one that is not installed raises `DigitalTwinUniverseError` with the command that installs it.
 Another implementation is a module satisfying the protocol and a branch in that factory.

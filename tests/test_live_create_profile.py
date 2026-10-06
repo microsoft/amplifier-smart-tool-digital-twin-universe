@@ -4,8 +4,9 @@ The agent drives `digital-twin-universe` through its own shell against the real 
 tool can see its universes appear, so this test does not isolate `~/.digital-twin-universe/universes`. It asserts that nothing
 launched from its own repository is left afterwards, and touches nothing else: other universes on the machine belong
 to whoever launched them. Slow and paid: it runs once per agent provider that is installed and configured, a Copilot
-sign-in for `copilot`, OPENAI_API_KEY for the default `amplifier-agent` model, and a Codex sign-in for `codex`, and it
-is marked `model` so `-m "not model"` deselects it.
+sign-in for `copilot`, OPENAI_API_KEY for the default `amplifier-agent` model, a Codex sign-in for `codex`, and
+ANTHROPIC_API_KEY or a cloud provider's credentials for `claude`, and it is marked `model` so `-m "not model"` deselects
+it.
 """
 
 import os
@@ -32,9 +33,9 @@ def _signed_in() -> bool:
     )
 
 
-def _codex_signed_in() -> bool:
+def _preflight_passes(agent_provider: AgentProvider) -> bool:
     try:
-        resolve_intelligence("codex").preflight()
+        resolve_intelligence(agent_provider).preflight()
     except DigitalTwinUniverseError:
         return False
     return True
@@ -62,7 +63,16 @@ def _from(repository: Path) -> list[str]:
         ),
         pytest.param(
             "codex",
-            marks=pytest.mark.skipif(not _codex_signed_in(), reason="needs the codex extra and a Codex sign-in"),
+            marks=pytest.mark.skipif(
+                not _preflight_passes("codex"), reason="needs the codex extra and a Codex sign-in"
+            ),
+        ),
+        pytest.param(
+            "claude",
+            marks=pytest.mark.skipif(
+                not _preflight_passes("claude"),
+                reason="needs the claude extra and ANTHROPIC_API_KEY or a cloud provider's credentials",
+            ),
         ),
     ],
 )

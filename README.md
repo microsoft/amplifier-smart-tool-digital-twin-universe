@@ -6,7 +6,7 @@ Stands up isolated, realistic environments from a profile using Docker Compose c
 - Simulating and modeling the world. For example say we want to build an app that integrates with M365 or GitHub - we want to verify that integration with our own data easily and without hitting the real service over and over. DTUs allow you to easily override and re-route requests to a mock/simulated service running in the Compose stack.
 
 This is a [Smart Tool](https://github.com/microsoft/amplifier-smart-tools) which is a library with a thin CLI over it and model-backed capabilities sit behind an interface so many providers can be used.
-We support [GitHub Copilot SDK](https://github.com/github/copilot-sdk), [Amplifier Agent](https://github.com/microsoft/amplifier-agent), and the [OpenAI Codex SDK](https://github.com/openai/codex/tree/main/sdk/python).
+We support [GitHub Copilot SDK](https://github.com/github/copilot-sdk), [Amplifier Agent](https://github.com/microsoft/amplifier-agent), the [OpenAI Codex SDK](https://github.com/openai/codex/tree/main/sdk/python), and the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-python).
 
 ## Installation
 
@@ -17,6 +17,7 @@ Prerequisites:
   - `copilot` agent provider: [GitHub CLI](https://cli.github.com/) signed in to an account with a [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites).
   - `amplifier-agent` agent provider: the model provider's credentials, for instance `OPENAI_API_KEY` for the default `openai/...` model. See [providers](https://github.com/microsoft/amplifier-agent/blob/v0.20.0/docs/providers.md).
   - `codex` agent provider: the [Codex CLI](https://github.com/openai/codex) signed in with ChatGPT or an API key. See [authentication](https://developers.openai.com/codex/auth).
+  - `claude` agent provider: `ANTHROPIC_API_KEY`, or any of its other supported modes of [authentication](https://code.claude.com/docs/en/agent-sdk/quickstart).
 - (Optional) Install the Smart Tools skill so your agent knows about Smart Tools: `npx skills add microsoft/amplifier-smart-tools`
 
 To get started:
@@ -25,7 +26,7 @@ To get started:
 # Install the Agent Skill so your agent knows about it.
 npx skills add microsoft/amplifier-smart-tool-digital-twin-universe
 # Install the tool, choosing the provider(s) you want
-uv tool install "digital-twin-universe[all | copilot | amplifier-agent | codex] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+uv tool install "digital-twin-universe[all | copilot | amplifier-agent | codex | claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
 # Check setup; if it needs fixing, this plans the fix with the agent provider. Apply it with --yes.
 digital-twin-universe install
 ```

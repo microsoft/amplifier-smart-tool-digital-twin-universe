@@ -64,3 +64,4 @@ The repositories are (add to the list as more are needed, the one exception to m
 - https://github.com/DavidKoleczek/mybench-smart-tool
 - https://github.com/Microsoft/amplifier-smart-tool-creator
 - https://github.com/gabrieldemarmiesse/python-on-whales
+- https://github.com/anthropics/claude-agent-sdk-python

@@ -27,17 +27,17 @@ from digital_twin_universe.schemas import (
 
 AGENT_PROVIDER_HELP = (
     "What the model-backed work runs through: copilot (GitHub Copilot, signed in as the GitHub CLI's user), "
-    "amplifier-agent (Amplifier Agent, with the model provider's credentials), or codex (OpenAI Codex, with the "
-    "Codex sign-in). The first installed, in that order, when omitted."
+    "amplifier-agent (Amplifier Agent, with the model provider's credentials), codex (OpenAI Codex, with the "
+    "Codex sign-in), or claude (Claude Agent SDK). The first installed, in that order, when omitted."
 )
-REASONING_EFFORT_NOTE = "Applies to the copilot and codex agent providers."
+REASONING_EFFORT_NOTE = "Applies to the copilot, codex, and claude agent providers."
 
 
 def _model_help(defaults: dict[AgentProvider, str]) -> str:
     named = "; ".join(f"{agent_provider}: {model}" for agent_provider, model in defaults.items())
     return (
-        "A Copilot model id for copilot, <provider>/<model> for amplifier-agent, a Codex model id for codex. "
-        f"Defaults to {named}."
+        "A Copilot model id for copilot, <provider>/<model> for amplifier-agent, a Codex model id for codex, a "
+        f"Claude model id for claude. Defaults to {named}."
     )
 
 

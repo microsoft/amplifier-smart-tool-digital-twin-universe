@@ -14,6 +14,7 @@ REFERENCES = {
     "copilot-sdk": "https://github.com/github/copilot-sdk",
     "amplifier-agent": "https://github.com/microsoft/amplifier-agent",
     "codex": "https://github.com/openai/codex",
+    "claude-agent-sdk-python": "https://github.com/anthropics/claude-agent-sdk-python",
     "agentskills": "https://github.com/agentskills/agentskills",
     "amplifier-bundle-digital-twin-universe": "https://github.com/microsoft/amplifier-bundle-digital-twin-universe",
     "amplifier-bundle-gitea": "https://github.com/microsoft/amplifier-bundle-gitea",
