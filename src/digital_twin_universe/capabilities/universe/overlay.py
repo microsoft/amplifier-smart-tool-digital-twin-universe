@@ -1,7 +1,7 @@
 """The overlay: the Compose file the tool renders beside a profile, holding everything Compose cannot say.
 
 Render, then run. A universe is the profile plus this file, both readable, both runnable by hand with
-`docker compose -f <profile> -f dtu.yaml`. A profile that serves nothing and rewrites nothing renders no overlay
+`docker compose -f <profile> -f dtu.yaml`, after `docker buildx bake` for what builds through the gateway. A profile that serves nothing and rewrites nothing renders no overlay
 at all: no git server, no gateway, no certificate authority, and no proxy in anyone's environment.
 """
 
@@ -57,6 +57,7 @@ class Overlay(NamedTuple):
     path: Path | None
     bootstrap: list[str]
     ca_path: Path | None
+    gateway_builds: list[str]
 
     @property
     def files(self) -> list[Path]:
@@ -67,7 +68,7 @@ def render(record: UniverseRecord, profile: Profile) -> Overlay:
     """Write the overlay for a universe, or nothing when the profile asks for nothing the overlay provides."""
     x_dtu = profile.x_dtu
     if not x_dtu.repositories and not x_dtu.needs_gateway:
-        return Overlay(path=None, bootstrap=[], ca_path=None)
+        return Overlay(path=None, bootstrap=[], ca_path=None, gateway_builds=[])
 
     assets = record.state_path / ASSET_DIRECTORY
     assets.mkdir(parents=True, exist_ok=True)
@@ -87,13 +88,14 @@ def render(record: UniverseRecord, profile: Profile) -> Overlay:
         build_proxy = f"http://127.0.0.1:{published}"
 
     for name in profile.services:
-        wiring = _wiring(name, profile, ca_path, bootstrap, build_proxy)
+        wiring = _wiring(name, record, profile, ca_path, bootstrap, build_proxy)
         if wiring:
             services[name] = wiring
 
     path = record.state_path / OVERLAY_FILE
     path.write_text(yaml.safe_dump({"services": services}, sort_keys=False), encoding="utf-8")
-    return Overlay(path=path, bootstrap=bootstrap, ca_path=ca_path)
+    gateway_builds = [name for name in profile.services if ca_path is not None and _builds(name, profile)]
+    return Overlay(path=path, bootstrap=bootstrap, ca_path=ca_path, gateway_builds=gateway_builds)
 
 
 def export_ca(record: UniverseRecord, overlay: Overlay) -> None:
@@ -218,7 +220,7 @@ def _gateway_service(assets: Path, profile: Profile, published: int) -> dict[str
 
 
 def _wiring(
-    name: str, profile: Profile, ca_path: Path | None, bootstrap: list[str], build_proxy: str
+    name: str, record: UniverseRecord, profile: Profile, ca_path: Path | None, bootstrap: list[str], build_proxy: str
 ) -> dict[str, Any]:
     """What a profile's own service gains from the universe: the CA, the proxy, and an order to start in."""
     wiring: dict[str, Any] = {}
@@ -250,6 +252,10 @@ def _wiring(
             "additional_contexts": {CA_CONTEXT: str(ca_path.parent)},
             "network": "host",
         }
+        if not profile.config["services"][name].get("image"):
+            # The name Compose would give the image anyway, written down so that Buildx Bake, which `launch` builds
+            # these with, tags the image Compose then runs.
+            wiring["image"] = f"{record.id}-{name}"
     return wiring
 
 

@@ -49,7 +49,9 @@ back to the universe. A profile with `x-dtu.repositories`, `rewrites`, or `allow
 anything starts, so a launch that fails after that point leaves a universe to `destroy`.
 
 Every service with a `build:` is rebuilt on every launch; Docker's build cache makes an
-unchanged one quick.
+unchanged one quick. With the gateway, Buildx builds them first, with
+`docker buildx bake --allow=network.host` from `bake.yaml` in the same directory, and Compose
+only starts them.
 
 ## Arguments
 
@@ -101,4 +103,5 @@ These leave the universe recorded, with whatever started still up, for inspectio
 - `build-failed`: an image build failed; the message has the end of the build output.
 - `unhealthy`: a container failed its healthcheck; the message has its last log lines.
 - `timeout`: services were still starting after `--timeout-seconds`.
-- `launch-failed`: `docker compose up` failed some other way; the message has Compose's output.
+- `launch-failed`: `docker compose up` or `docker buildx bake` failed some other way; the message
+  has Docker's output.

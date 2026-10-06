@@ -3,9 +3,12 @@
 from pathlib import Path
 import re
 import sys
+from typing import Any
 
 from python_on_whales import ClientNotFoundError, DockerClient
 from python_on_whales.exceptions import DockerException
+from python_on_whales.utils import stream_stdout_and_stderr
+import yaml
 
 from digital_twin_universe.capabilities.universe import overlay, state
 from digital_twin_universe.capabilities.universe import validate as validate_module
@@ -21,6 +24,9 @@ PORT_IN_USE_PATTERN = re.compile(
 UNHEALTHY_PATTERN = re.compile(r"container (?P<container>\S+) is unhealthy")
 TIMEOUT_MARKER = "application not healthy after"
 BUILD_FAILED_MARKER = "failed to solve"
+BAKE_FILE = "bake.yaml"
+BUILDX_VERSION_PATTERN = re.compile(r"\bv(?P<major>\d+)\.(?P<minor>\d+)")
+BAKE_ALLOW_VERSION = (0, 17)
 
 
 def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe:
@@ -49,18 +55,79 @@ def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe:
         if rendered.bootstrap:
             _up(client, record, timeout_seconds, services=rendered.bootstrap)
             overlay.export_ca(record, rendered)
-        _up(client, record, timeout_seconds)
+        buildx = _buildx_version(client) if rendered.gateway_builds else None
+        if buildx is not None:
+            _bake(client, record, rendered.gateway_builds, grant=buildx >= BAKE_ALLOW_VERSION)
+        _up(client, record, timeout_seconds, build=buildx is None)
     except (ClientNotFoundError, DockerException) as error:
         raise _launch_error(record, timeout_seconds, error) from error
     return measure(record)
 
 
-def _up(client: DockerClient, record: UniverseRecord, timeout_seconds: int, services: list[str] | None = None) -> None:
+def _up(
+    client: DockerClient,
+    record: UniverseRecord,
+    timeout_seconds: int,
+    services: list[str] | None = None,
+    build: bool = True,
+) -> None:
     """One `compose up` pass. Compose reports progress on stderr, which is passed through so a person sees it."""
     for _, line in client.compose.up(
-        services=services, build=True, wait=True, wait_timeout=timeout_seconds, stream_logs=True
+        services=services,
+        build=build,
+        no_build=not build,
+        wait=True,
+        wait_timeout=timeout_seconds,
+        stream_logs=True,
     ):
         sys.stderr.write(line.decode(errors="replace"))
+
+
+def _buildx_version(client: DockerClient) -> tuple[int, int] | None:
+    """Buildx's major and minor version, or None when there is no Buildx or it does not say which it is."""
+    try:
+        reported = client.buildx.version()
+    except DockerException:
+        return None
+    version = BUILDX_VERSION_PATTERN.search(reported)
+    return (int(version["major"]), int(version["minor"])) if version is not None else None
+
+
+def _bake(client: DockerClient, record: UniverseRecord, services: list[str], grant: bool) -> None:
+    """Build the images that reach the gateway over the host network, before Compose starts them.
+
+    Compose cannot build these itself: it hands Bake a definition without `--allow=network.host`, which Buildx
+    0.37.2 and later refuse, and whose `network` Buildx before 0.17 ignores. Bake reads the stack here as Compose
+    resolved it, so paths, `.env`, and interpolation mean what they mean to Compose, and tags the images the overlay
+    names. `grant` passes the entitlements, which Buildx before 0.17 neither checks nor accepts.
+    """
+    config = client.compose.config(return_json=True)
+    definition = record.state_path / BAKE_FILE
+    definition.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    entitlements = ["network.host", *(f"fs.read={path}" for path in _local_contexts(config, services))]
+    command = [
+        *client.docker_cmd,
+        "buildx",
+        "bake",
+        "--progress=plain",
+        "--load",
+        *([f"--allow={entitlement}" for entitlement in entitlements] if grant else []),
+        "--file",
+        definition,
+    ]
+    for _, line in stream_stdout_and_stderr(command):
+        sys.stderr.write(line.decode(errors="replace"))
+
+
+def _local_contexts(config: dict[str, Any], services: list[str]) -> list[str]:
+    """Every directory on the host the builds read, each of which Bake reads only when granted."""
+    paths: set[str] = set()
+    for name in services:
+        build = config["services"][name]["build"]
+        for context in [build.get("context"), *(build.get("additional_contexts") or {}).values()]:
+            if context and Path(context).is_absolute():
+                paths.add(context)
+    return sorted(paths)
 
 
 def _profile_invalid(report: ProfileReport) -> DigitalTwinUniverseError:
@@ -111,10 +178,11 @@ def _launch_error(record: UniverseRecord, timeout_seconds: int, error: Exception
             f"Universe {record.id} was still starting after {timeout_seconds}s.",
             f"Raise `timeout_seconds`, or inspect it with `docker compose -p {record.id} ps` and `logs`. {left_running}",
         )
+    command = "docker buildx bake" if "bake" in (getattr(error, "docker_command", None) or []) else "docker compose up"
     return DigitalTwinUniverseError(
         "launch-failed",
-        f"`docker compose up` failed for universe {record.id}:\n{_tail(stderr)}",
-        f"Read Compose's message above. {left_running}",
+        f"`{command}` failed for universe {record.id}:\n{_tail(stderr)}",
+        f"Read Docker's message above. {left_running}",
     )
 
 
