@@ -5,7 +5,7 @@ from typing import Any
 
 from python_on_whales import ClientNotFoundError, DockerClient
 from python_on_whales.components.container.cli_wrapper import Container
-from python_on_whales.exceptions import DockerException
+from python_on_whales.exceptions import DockerException, NoSuchContainer
 
 from digital_twin_universe.capabilities.universe.state import UniverseRecord
 from digital_twin_universe.schemas import (
@@ -66,7 +66,12 @@ def compose_containers() -> dict[str, list[Container]]:
         raise translate_docker_error(error) or error from error
     grouped: dict[str, list[Container]] = {}
     for container in containers:
-        grouped.setdefault((container.config.labels or {})[PROJECT_LABEL], []).append(container)
+        # Each attribute read is a fresh inspect, and a container removed since the list is no longer there to read.
+        try:
+            project = (container.config.labels or {})[PROJECT_LABEL]
+        except NoSuchContainer:
+            continue
+        grouped.setdefault(project, []).append(container)
     return grouped
 
 

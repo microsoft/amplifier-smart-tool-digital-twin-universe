@@ -15,7 +15,7 @@ Prerequisites:
 - [Docker](https://docs.docker.com/get-started/get-docker/)
 - For the model-backed capabilities, one of:
   - `copilot` agent provider: [GitHub CLI](https://cli.github.com/) signed in to an account with a [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites).
-  - `amplifier-agent` agent provider: the model provider's credentials, for instance `OPENAI_API_KEY` for the default `openai/...` model. See [providers](https://github.com/microsoft/amplifier-agent/blob/v0.20.0/docs/providers.md).
+  - `amplifier-agent` agent provider: the model provider's credentials, for instance `OPENAI_API_KEY` for the default `openai/...` model. See [providers](https://github.com/microsoft/amplifier-agent/blob/v0.22.0/docs/providers.md).
   - `codex` agent provider: the [Codex CLI](https://github.com/openai/codex) signed in with ChatGPT or an API key. See [authentication](https://developers.openai.com/codex/auth).
   - `claude` agent provider: `ANTHROPIC_API_KEY`, or any of its other supported modes of [authentication](https://code.claude.com/docs/en/agent-sdk/quickstart).
 - (Optional) Install the Smart Tools skill so your agent knows about Smart Tools: `npx skills add microsoft/amplifier-smart-tools`

@@ -2,14 +2,15 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-from python_on_whales.exceptions import DockerException
+from python_on_whales.exceptions import DockerException, NoSuchContainer
 from typer.testing import CliRunner
 
 from digital_twin_universe import lib
+from digital_twin_universe.capabilities.universe import compose, state
 from digital_twin_universe.capabilities.universe import launch as launch_module
-from digital_twin_universe.capabilities.universe import state
 from digital_twin_universe.capabilities.universe.compose import universe_state, urls
 from digital_twin_universe.capabilities.universe.state import UniverseRecord
 from digital_twin_universe.cli import app, main
@@ -140,6 +141,27 @@ def test_urls_follow_the_profile_where_it_describes_a_port_and_default_elsewhere
         Url(url="http://localhost:32768/", port=32768, path="/", label=None),
     ]
     assert urls({}, specs) == []
+
+
+class ListedContainer:
+    """A listed container that reads its labels, or is gone by the time they are read."""
+
+    def __init__(self, project: str | None) -> None:
+        self._project = project
+
+    @property
+    def config(self) -> SimpleNamespace:
+        if self._project is None:
+            raise NoSuchContainer(["docker", "container", "inspect"], 1)
+        return SimpleNamespace(labels={compose.PROJECT_LABEL: self._project})
+
+
+def test_a_container_removed_after_the_list_is_left_out_of_the_grouping(monkeypatch: pytest.MonkeyPatch) -> None:
+    first, gone, second = ListedContainer("dtu-a"), ListedContainer(None), ListedContainer("dtu-b")
+    client = SimpleNamespace(container=SimpleNamespace(list=lambda **options: [first, gone, second]))
+    monkeypatch.setattr(compose, "compose_client", lambda: client)
+
+    assert compose.compose_containers() == {"dtu-a": [first], "dtu-b": [second]}
 
 
 def test_a_record_written_before_urls_existed_still_reads(state_root: Path) -> None:
