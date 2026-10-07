@@ -176,7 +176,7 @@ def install(
 ) -> None:
     """Get Docker working on this host. Model-backed: reads the official Docker docs for this platform and plans
     the install; runs the unattended steps with --yes. Deterministic when Docker is already present. Model-backed
-    work runs through GitHub Copilot or Amplifier Agent, whichever --agent-provider names.
+    work runs through GitHub Copilot, Amplifier Agent, Codex, or Claude, whichever --agent-provider names.
 
     Prints InstallReport JSON on stdout, step progress on stderr. Exits 0 on ready or installed, 1 on planned,
     action-required or failed. Raises docs-unreachable, plan-rejected, install-timeout, or an agent provider
@@ -223,9 +223,9 @@ def create_profile(
     ] = 1800,
 ) -> None:
     """Write a profile under .agents/digital-twin-universe/<name>/ and prove it. Model-backed: runs through
-    GitHub Copilot or Amplifier Agent, whichever --agent-provider names. An agent reads the project and Docker's
-    docs, writes the profile, launches it, runs checks in it, and destroys it; the tool then launches it again and
-    reruns the checks, and only a profile that passes is kept.
+    GitHub Copilot, Amplifier Agent, Codex, or Claude, whichever --agent-provider names. An agent reads the project
+    and Docker's docs, writes the profile, launches it, runs checks in it, and destroys it; the tool then launches it
+    again and reruns the checks, and only a profile that passes is kept.
 
     Prints CreatedProfile JSON on stdout, one progress line per phase on stderr. Exits 0 on created or validated,
     1 on failed (the draft stays at <name>.draft/), 2 on --keep with --no-verify. Raises profile-exists,
