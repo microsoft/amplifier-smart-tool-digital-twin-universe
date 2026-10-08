@@ -199,6 +199,7 @@ def _document(name: str, header: list[str], body: list[str], resources: list[str
     # A caller that can run the tool cannot always read its files, so the canonical source stands in for them.
     if repository:
         lines.append(f"Repository: {repository}")
+    lines.append(f"Version: {version()}")
     lines.append("Relative paths in this skill are relative to the skill directory.")
     lines += header
     lines += ["", f"# {name}", "", *body]

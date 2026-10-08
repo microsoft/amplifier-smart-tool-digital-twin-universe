@@ -5,7 +5,7 @@ description: >-
 license: MIT
 metadata:
   author: DavidKoleczek
-  version: "0.5.3"
+  version: "0.5.4"
   repository: https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
 ---
 
@@ -34,3 +34,9 @@ Run `digital-twin-universe --help`. It prints the tool's skill: when to use it, 
 worked invocations, sharp edges, and which files to read. Follow it. Confirm every argument
 against `digital-twin-universe <command> --help` rather than memory, including `install` and its explicit
 consent flags for Docker setup.
+
+## Keep it current
+
+Keep the tool up to date for the user by default if the permission mode allows it using `uv tool upgrade digital-twin-universe`.
+Keep the skill up to date for the user with `npx skills update digital-twin-universe`, adding `-g` for global installs.
+Do not try to get around restrictions or operate against the user's preferences to update tools (or skills).

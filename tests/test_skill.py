@@ -46,7 +46,8 @@ def test_repository_line_is_omitted_when_the_package_declares_no_url(monkeypatch
     header = skill_module.skill().splitlines()
 
     assert "Repository:" not in skill_module.skill()
-    assert header[2] == RELATIVE_PATHS_LINE
+    assert header[2] == f"Version: {load_manifest().version}"
+    assert header[3] == RELATIVE_PATHS_LINE
 
 
 def test_repository_line_sits_between_the_header_lines_when_declared(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -55,7 +56,17 @@ def test_repository_line_sits_between_the_header_lines_when_declared(monkeypatch
 
     assert header[1].startswith("Skill directory: ")
     assert header[2] == "Repository: https://example.invalid/digital-twin-universe"
-    assert header[3] == RELATIVE_PATHS_LINE
+    assert header[3] == f"Version: {load_manifest().version}"
+    assert header[4] == RELATIVE_PATHS_LINE
+
+
+def test_version_line_names_the_manifest_version_in_every_skill(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(skill_module, "repository_url", lambda: None)
+    line = f"Version: {load_manifest().version}"
+
+    assert skill_module.skill().splitlines()[2] == line
+    for capability in CAPABILITIES:
+        assert skill_module.skill(capability.name).splitlines()[2] == line
 
 
 def test_skill_resources_resolve_under_the_skill_directory() -> None:

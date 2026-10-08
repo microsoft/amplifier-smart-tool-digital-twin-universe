@@ -1,7 +1,7 @@
 ---
 smart_tool_format: 1
 name: digital-twin-universe
-version: 0.5.3
+version: 0.5.4
 description: >-
   Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed
 use_cases:
