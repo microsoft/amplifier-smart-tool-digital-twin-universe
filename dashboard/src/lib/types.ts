@@ -29,3 +29,12 @@ export type Universe = {
   state_path: string;
   created_at: string;
 };
+
+export type Destroyed = {
+  id: string;
+  removed: string[];
+  outcome: "removed" | "residue" | "unknown";
+  remaining: Record<string, string[] | null>;
+  errors: Record<string, string>;
+  state_removed: boolean;
+};

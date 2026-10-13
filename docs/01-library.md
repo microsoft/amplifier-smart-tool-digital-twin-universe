@@ -109,6 +109,9 @@ failed       attempts exhausted, or a variable the profile rightly demands is un
 
 `CreatedProfile.checks` is the tool's own run, not the agent's. `env-missing` is never sent back to the agent as a defect: the profile is right to demand the variable, so the run ends `failed` with `next` saying what to export. `keep=True` leaves the tool's verified universe running with its `universe_id` and `urls` in the result and its record pointed at `<name>/`; when cleanup changed the profile, the universe launched from the cleaned profile is the one kept.
 
+Incomplete cleanup of the tool's verified universe also ends `failed`, retaining its id and cleanup details in
+the result instead of promoting the draft or launching another verification universe.
+
 The tool destroys only universes it launched itself. Universes the agent launched are the agent's to destroy, in the authoring turns and again in the cleanup turn. A universe whose record's `profile_path` is under the draft can only have come from this run, so any such universe still listed at the end goes into `notes` with its id and `next` names its `destroy` command; the tool does not sweep it, since a sweep by name would take down a universe someone else launched from a profile of the same name.
 
 The documentation the agent reads is kept at `~/.digital-twin-universe/reference/`: a sparse, shallow clone of `docker/docs` holding the Compose file reference, the Compose manual, and the build manual, plus the Dockerfile reference fetched from BuildKit, refreshed when older than seven days. Without `git` or without network the reference is reported absent in `notes` and the run goes on.
@@ -212,6 +215,15 @@ Every record in the state directory, each measured against Docker in one pass. A
 
 Raises `docker-unavailable`.
 
+### Recorded ids
+
+```python
+def recorded_ids() -> list[str]
+```
+
+Sorted ids with a `universe.json` record on this machine, including failed launches. Reads only the filesystem,
+without Docker inventory or parsing the records. An absent state root returns an empty list.
+
 ## Status
 
 One universe, measured now. `launch` returns the same measurement.
@@ -269,7 +281,17 @@ Raises `universe-not-found`, `twin-not-running`, `source-not-found` (the host pa
 
 ## Destroy
 
-Remove a universe: every container, network, and volume, and its state directory. Built images stay, so the next `launch` of the same profile is fast. `Destroyed.removed` names what was taken down.
+Take a universe down and observe its containers, networks, and volumes by exact Compose project label.
+Built images stay. `Destroyed.removed` names pre-down resources confirmed absent afterwards.
+`remaining` holds post-down names under `containers`, `networks`, and `volumes`; `None` means that inventory failed.
+`errors` names inspection or state-cleanup errors. `outcome` is `removed`, `residue`, or `unknown`.
+
+State is removed only after all three inventories succeed and are empty. Residue or failed inspection retains
+the record. Failed state deletion reports `residue` and attempts to restore the record; if restoration fails,
+the error names manual state cleanup rather than a retry command. `state_removed` reports whether the directory is gone.
+`Destroyed.complete` is true only when all inventories are empty, state is gone, and there are no errors.
+`Destroyed.require_removed()` raises `cleanup-incomplete` otherwise, including for defaulted legacy results without observations.
+The CLI prints the result JSON and exits 1 for incomplete cleanup, 0 for complete cleanup.
 
 Containers get one second after SIGTERM, not Compose's ten: the volumes go with them, so a graceful stop has nothing to preserve, and a process running as PID 1 (`sleep infinity`, `python -m http.server`) ignores the signal and would sit out the full grace period.
 

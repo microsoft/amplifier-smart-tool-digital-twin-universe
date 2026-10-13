@@ -140,6 +140,7 @@ class Run:
     session_id: str | None = None
     attempts: int = 0
     tool_ids: set[str] = field(default_factory=set)
+    incomplete_cleanup: dict[str, str] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     result: CreatedProfile | None = None
     up: Universe | None = None
@@ -242,14 +243,14 @@ class Run:
         note = self.destroy_universe(universe.id)
         if note is not None:
             self.notes.append(note)
-        left_up = universe if note is not None else None
+            return Verdict(fresh, universe, note)
         if passed:
-            return Verdict(fresh, left_up, None)
+            return Verdict(fresh, None, None)
         failed = [check for check in fresh if check.status != "passed"]
         failure = "the tool launched the draft and these checks did not pass for it:\n" + "\n".join(
             f"- `{check.command}` (expect_stdout: {check.expect_stdout!r}): {check.detail}" for check in failed
         )
-        return Verdict(fresh, left_up, failure)
+        return Verdict(fresh, None, failure)
 
     def run_checks(self, universe_id: str, checks: list[Check]) -> bool:
         passed = True
@@ -272,9 +273,16 @@ class Run:
         """Destroy a universe the tool launched; a failure is a note naming the command, never an exception."""
         _phase(f"destroying {id} ...")
         try:
-            self.universes.destroy(id)
+            self.universes.destroy(id).require_removed()
         except DigitalTwinUniverseError as error:
-            return f"Universe {id} could not be destroyed ({error.message}); run `digital-twin-universe destroy --id {id}`."
+            note = (
+                str(error)
+                if error.code == "cleanup-incomplete"
+                else f"Universe {id} could not be destroyed ({error.message}); run `digital-twin-universe destroy --id {id}`."
+            )
+            self.incomplete_cleanup[id] = note
+            return note
+        self.incomplete_cleanup.pop(id, None)
         return None
 
     def cleanup(self) -> Cleanup | None:
@@ -378,8 +386,9 @@ def create_profile(
         return _attempts(run, final)
     except (TimeoutError, subprocess.TimeoutExpired) as error:
         if run.up is not None:
-            with suppress(DigitalTwinUniverseError):
-                universes.destroy(run.up.id)
+            note = run.destroy_universe(run.up.id)
+            if note is not None:
+                run.notes.append(note)
         partial = (
             run.result.model_dump_json(indent=2)
             if run.result is not None
@@ -387,7 +396,7 @@ def create_profile(
         )
         raise DigitalTwinUniverseError(
             "create-timeout",
-            f"Creating the profile exceeded {timeout_seconds}s. Report so far:\n{partial}",
+            f"Creating the profile exceeded {timeout_seconds}s. Report so far:\n{partial}\n" + "\n".join(run.notes),
             f"Read the draft at {draft} and `digital-twin-universe list`; raise timeout_seconds before retrying.",
         ) from error
 
@@ -431,6 +440,10 @@ def _attempts(run: Run, final: Path) -> CreatedProfile:
         verdict = run.verify_draft(draft.checks, hold=run.keep)
         run.result.checks, run.up = verdict.checks, verdict.universe
         if verdict.failure is not None:
+            if run.incomplete_cleanup:
+                return _failed(
+                    run, "resolve the incomplete cleanup described in the notes before retrying", verdict.failure
+                )
             if verdict.error is not None and verdict.error.code == "env-missing":
                 return _failed(run, verdict.error.remedy, verdict.error.message)
             failure = _with_agent_view(verdict, draft)
@@ -444,6 +457,8 @@ def _attempts(run: Run, final: Path) -> CreatedProfile:
             if run.up is not None:
                 note = run.destroy_universe(run.up.id)
                 run.notes += [note] if note is not None else []
+                if note is not None:
+                    return _failed(run, "resolve the incomplete cleanup described in the notes before retrying", None)
                 run.up = None
             _phase("validating the cleaned draft ...")
             report = run.universes.validate(run.compose)
@@ -454,6 +469,8 @@ def _attempts(run: Run, final: Path) -> CreatedProfile:
             verdict = run.verify_draft(draft.checks, hold=run.keep)
             run.result.checks, run.up = verdict.checks, verdict.universe
             if verdict.failure is not None:
+                if run.incomplete_cleanup:
+                    return _failed(run, "resolve the incomplete cleanup described in the notes before retrying", None)
                 failure = "your cleanup changed the profile and it no longer passes:\n" + _with_agent_view(
                     verdict, draft
                 )
@@ -512,6 +529,10 @@ def _finish(run: Run, path: Path) -> CreatedProfile:
         raise rejected("no submission was ever validated")
     result.path = path
     result.attempts = run.attempts
+    if run.incomplete_cleanup and run.up is None:
+        result.universe_id = sorted(run.incomplete_cleanup)[0]
+        result.urls = []
+        result.notes.append(f"Tool universe ids with incomplete cleanup: {', '.join(sorted(run.incomplete_cleanup))}.")
     result.notes.extend(run.notes)
     run.notes.clear()
     result.notes.extend(run.reference.notes)
@@ -522,11 +543,12 @@ def _finish(run: Run, path: Path) -> CreatedProfile:
         result.urls = run.up.urls if kept else []
         if not kept:
             result.notes.append(
-                f"Universe {run.up.id} launched by the tool is still up; run `digital-twin-universe destroy --id {run.up.id}`."
+                f"Universe {run.up.id} launched by the tool has incomplete cleanup; inspect the cleanup notes."
             )
+            result.next = "resolve the incomplete cleanup described in the notes before launching again"
     if kept and run.up is not None:
         result.next = f"exec into it with `digital-twin-universe exec --id {run.up.id}`; destroy it with `digital-twin-universe destroy --id {run.up.id}`"
-    elif result.outcome in ("created", "validated"):
+    elif run.up is None and result.outcome in ("created", "validated"):
         result.next = f"launch it with `digital-twin-universe launch --profile {run.name}`"
     leftovers = run.agent_universes()
     result.notes.extend(

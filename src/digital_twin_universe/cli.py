@@ -360,9 +360,12 @@ def file_pull(
 def destroy(id: Annotated[str, typer.Option(help="The universe id `launch` printed.")]) -> None:
     """Remove a universe: its containers, networks, volumes, and state. Built images stay. Deterministic.
 
-    Prints what was removed as JSON.
+    Prints the cleanup observation as JSON; exits 1 when cleanup is incomplete.
     """
-    typer.echo(lib.destroy(id).model_dump_json(indent=2))
+    result = lib.destroy(id)
+    typer.echo(result.model_dump_json(indent=2))
+    if not result.complete:
+        raise typer.Exit(1)
 
 
 @app.command()
