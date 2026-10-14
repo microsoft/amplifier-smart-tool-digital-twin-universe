@@ -280,6 +280,20 @@ class FileArchive(BaseModel):
     sha256: str
 
 
+class RepositorySnapshot(BaseModel):
+    """An exact selected source archive and the retained Git identities it was built from."""
+
+    path: Path
+    source_head: str
+    source_branch: str
+    snapshot_commit: str
+    snapshot_tree: str
+    files: int
+    shallow_source: bool
+    archive_bytes: int
+    archive_sha256: str
+
+
 class Transfer(BaseModel):
     """What one push or pull copied, with `docker cp` semantics for where it landed."""
 

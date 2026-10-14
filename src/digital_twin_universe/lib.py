@@ -11,7 +11,7 @@ from digital_twin_universe.capabilities.universe import execute as execute_modul
 from digital_twin_universe.capabilities.universe import export as export_module
 from digital_twin_universe.capabilities.universe import files as files_module
 from digital_twin_universe.capabilities.universe import launch as launch_module
-from digital_twin_universe.capabilities.universe import state
+from digital_twin_universe.capabilities.universe import repository_snapshot, state
 from digital_twin_universe.capabilities.universe import status as status_module
 from digital_twin_universe.capabilities.universe import stop as stop_module
 from digital_twin_universe.capabilities.universe import validate as validate_module
@@ -34,6 +34,7 @@ from digital_twin_universe.schemas import (
     Manifest,
     ProfileReport,
     ReasoningEffort,
+    RepositorySnapshot,
     Stopped,
     Transfer,
     Universe,
@@ -74,6 +75,11 @@ def check(config: BackendConfig | None = None) -> HostReport:
     """Whether this host can run a universe: the Docker CLI, a reachable daemon, and the Compose plugin."""
     with configured(config):
         return check_module.check()
+
+
+def export_repository_snapshot(source: Path, destination: Path) -> RepositorySnapshot:
+    """Export a stable selected source tree to a new private tar archive, without Docker or a model provider."""
+    return repository_snapshot.export_archive(source, destination)
 
 
 def install(

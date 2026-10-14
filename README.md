@@ -84,6 +84,9 @@ digital-twin-universe exec --id <id>
 digital-twin-universe file-push --id <id> --source ./src --destination /workspace
 digital-twin-universe file-pull --id <id> --source /var/log/app.log --destination ./
 
+# Export approved source without Docker (Git and no-follow reads on Linux/WSL/macOS)
+digital-twin-universe export-repository-snapshot --source ./project --destination ./retained/source.tar
+
 # Take it down
 digital-twin-universe destroy --id <id>
 

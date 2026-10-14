@@ -5,6 +5,7 @@ import hashlib
 from pathlib import Path
 import re
 import sys
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 from python_on_whales import ClientNotFoundError, DockerClient
@@ -231,9 +232,16 @@ def _bake(client: DockerClient, record: UniverseRecord, services: list[str], gra
     resolved it, so paths, `.env`, and interpolation mean what they mean to Compose, and tags the images the overlay
     names. `grant` passes the entitlements, which Buildx before 0.17 neither checks nor accepts.
     """
-    config = client.compose.config(return_json=True)
+    config = _build_config(client.compose.config(return_json=True), services)
     definition = record.state_path / BAKE_FILE
-    definition.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=record.state_path, delete=False) as temporary:
+        pending = Path(temporary.name)
+        try:
+            temporary.write(yaml.safe_dump(config, sort_keys=False))
+            temporary.close()
+            pending.replace(definition)
+        finally:
+            pending.unlink(missing_ok=True)
     entitlements = ["network.host", *(f"fs.read={path}" for path in _local_contexts(config, services))]
     command = [
         *client.docker_cmd,
@@ -247,6 +255,36 @@ def _bake(client: DockerClient, record: UniverseRecord, services: list[str], gra
     ]
     for _, line in stream_stdout_and_stderr(command):
         sys.stderr.write(line.decode(errors="replace"))
+
+
+def _build_config(config: dict[str, Any], services: list[str]) -> dict[str, Any]:
+    """Retain build inputs, never resolved runtime environment or unrelated service settings."""
+    selected: dict[str, Any] = {}
+    secret_names: set[str] = set()
+    for name in services:
+        service = config["services"][name]
+        build = {key: value for key, value in service["build"].items() if not key.startswith("x-")}
+        selected[name] = {"build": build, **{key: service[key] for key in ("image", "platform") if key in service}}
+        for secret in build.get("secrets") or []:
+            secret_names.add(secret if isinstance(secret, str) else secret["source"])
+    result = {"services": selected}
+    if config.get("name"):
+        result["name"] = config["name"]
+    if secret_names:
+        secrets = {}
+        for name in sorted(secret_names):
+            secret = config.get("secrets", {}).get(name, {})
+            if "content" in secret:
+                raise DigitalTwinUniverseError(
+                    "build-secret-inline",
+                    f"Build secret {name!r} contains inline content that cannot be saved in bake.yaml.",
+                    "Provide the build secret through a file or environment variable instead of inline content.",
+                )
+            secrets[name] = {
+                key: value for key, value in secret.items() if key in ("file", "environment", "external", "name")
+            }
+        result["secrets"] = secrets
+    return result
 
 
 def _local_contexts(config: dict[str, Any], services: list[str]) -> list[str]:

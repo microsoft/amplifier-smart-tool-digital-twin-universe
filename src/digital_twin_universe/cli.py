@@ -341,6 +341,15 @@ def file_push(
     typer.echo(lib.push_files(id, source, destination).model_dump_json(indent=2))
 
 
+@app.command("export-repository-snapshot")
+def export_repository_snapshot(
+    source: Annotated[Path, typer.Option(help="An approved repository or linked worktree root.")],
+    destination: Annotated[Path, typer.Option(help="A new tar archive in an existing owner-managed directory.")],
+) -> None:
+    """Export selected source bytes and provenance without Docker or a model provider. Deterministic."""
+    typer.echo(lib.export_repository_snapshot(source, destination).model_dump_json(indent=2))
+
+
 @app.command("file-pull")
 def file_pull(
     id: Annotated[str, typer.Option(help="The universe id `launch` printed.")],

@@ -33,6 +33,16 @@ digital-twin-universe check
 
 `lib.check()`, printed as JSON. Exits 0 when the report says `ok`, 1 when a prerequisite is missing, so `digital-twin-universe check && digital-twin-universe launch ...` does the right thing. The report is on stdout either way.
 
+## digital-twin-universe export-repository-snapshot
+
+```bash
+digital-twin-universe export-repository-snapshot --source ./project --destination ./retained/source.tar
+```
+
+`lib.export_repository_snapshot()`, printed as JSON with source and archive provenance. Needs Git and safe
+no-follow reads on Linux/WSL/macOS, but no Docker or model provider. Exits 1 on unsupported hosts, changing
+source, exceeded bounds, or an existing destination; never replaces retained output.
+
 ## digital-twin-universe install
 
 ```bash

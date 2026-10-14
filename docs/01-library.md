@@ -169,7 +169,7 @@ Raises `profile-not-found` and `docker-unavailable`.
 
 A universe is one Compose project. Its `id` is the project's name, `dtu-<profile name>-<4 hex>`, so `docker compose -p <id> logs` reaches the same stack by hand and `list` can tell two launches of one profile apart.
 
-What the tool renders for a universe lives in its state directory, `~/.digital-twin-universe/universes/<id>/`: `dtu.yaml`, the overlay, `overlay/`, the files it refers to, including the certificate authority the gateway minted, `bake.yaml`, the stack as Compose resolved it, which Buildx builds the gateway's builds from, and `universe.json`, the record: id, name, description, profile path, twin, and creation time. Everything else about a universe is in Docker.
+What the tool renders for a universe lives in its state directory, `~/.digital-twin-universe/universes/<id>/`: `dtu.yaml`, the overlay; `overlay/`, its CA and self-contained repository snapshots with provenance receipts; `bake.yaml`, a private build-only definition excluding runtime environment; and `universe.json`, the universe record. Explicit build arguments remain saved inputs; use file/environment build secrets for sensitive values. Container state is measured from Docker.
 
 A profile that serves nothing and rewrites nothing renders no overlay at all, so `dtu.yaml` is absent and the universe is exactly the profile.
 By hand, a universe with the gateway and a build runs as `docker buildx bake --allow=network.host --allow=fs.read=<dir> --load -f bake.yaml`, with one `fs.read` per build context and for `overlay/`, then `docker compose -p <id> -f <profile> -f dtu.yaml up --no-build`. Compose cannot build these itself: it never grants a build the host network, which Buildx 0.37.2 and later require.
@@ -264,6 +264,24 @@ def shell(id: str, user: str | None = None, workdir: str | None = None) -> int
 Returns the shell's exit code when the person leaves it. The shell is `bash -l` when the image has bash, `sh -l` otherwise. In practice only the CLI calls this; it is in the library so the CLI adds nothing.
 
 Raises `universe-not-found`, `twin-not-running`, `docker-unavailable`, and `no-tty` when the caller has no terminal.
+
+## Export repository snapshot
+
+```python
+def export_repository_snapshot(source: Path, destination: Path) -> RepositorySnapshot
+```
+
+Deterministic, without Docker or a model provider. Exports an approved repository or linked worktree's current
+tracked and nonignored untracked bytes to a new private tar archive outside the source. Preserves modes,
+deletions and symlink text; submodules become empty directories. No source Git metadata, hooks, filters,
+export-ignore or export-subst transformations are applied. Source files and index are unchanged. An existing
+archive is never replaced, and detected concurrent source changes fail without retry. Source credentials are
+not scrubbed: the caller approves what source it exports.
+
+Returns archive path, byte count and SHA256, source HEAD/branch, snapshot tree/commit, file count and shallow
+source flag. Safe file reads currently require Linux, WSL or macOS; native Windows reports
+`repository-snapshot-unsupported`. See `export-repository-snapshot --help` for the named size bounds and failure
+codes. Consumers must extract safely without following links outside their destination.
 
 ## Push and pull files
 

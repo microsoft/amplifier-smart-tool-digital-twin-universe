@@ -94,6 +94,12 @@ CAPABILITIES = (
         skill="capabilities/universe/stop.md",
     ),
     Capability(
+        "export-repository-snapshot",
+        "Export selected repository or linked worktree bytes to a private tar archive, with source provenance.",
+        model_backed=False,
+        skill="capabilities/universe/export-repository-snapshot.md",
+    ),
+    Capability(
         "destroy",
         "Remove a universe: its containers, networks, volumes, and state. Built images stay.",
         model_backed=False,

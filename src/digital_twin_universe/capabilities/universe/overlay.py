@@ -18,9 +18,11 @@ from urllib.parse import urlparse
 import certifi
 import yaml
 
+from digital_twin_universe.capabilities.universe import repository_snapshot
 from digital_twin_universe.capabilities.universe.compose import project_containers, service_name
 from digital_twin_universe.capabilities.universe.profile import Profile, Repository, XDtu
 from digital_twin_universe.capabilities.universe.state import UniverseRecord
+from digital_twin_universe.schemas import DigitalTwinUniverseError
 
 TEMPLATES = Path(__file__).parent / "templates"
 OVERLAY_FILE = "dtu.yaml"
@@ -129,6 +131,10 @@ def _git_service(assets: Path, profile_path: Path, repositories: Iterable[Reposi
     context.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(TEMPLATES / BOOTSTRAP, context / BOOTSTRAP)
     served = _served(profile_path, repositories)
+    snapshots = assets / "repositories"
+    snapshots.mkdir(mode=0o700, exist_ok=True)
+    for name, source in served.items():
+        repository_snapshot.export(source, snapshots / name)
     return {
         "image": GITEA_IMAGE,
         # The image's entrypoint hands to s6, which starts the server and nothing else; the universe has to
@@ -154,7 +160,7 @@ def _git_service(assets: Path, profile_path: Path, repositories: Iterable[Reposi
         },
         "volumes": [
             f"{context / BOOTSTRAP}:/dtu/{BOOTSTRAP}:ro",
-            *(f"{path}:/repos/{name}:ro" for name, path in served.items()),
+            *(f"{snapshots / name}:/repos/{name}:ro" for name in served),
         ],
         "healthcheck": {
             # Ready means the repositories are there, not that the server answers: a clone arriving between the
@@ -176,7 +182,7 @@ def _git_service(assets: Path, profile_path: Path, repositories: Iterable[Reposi
 
 
 def _gateway_service(assets: Path, profile: Profile, published: int) -> dict[str, Any]:
-    """The only route out: it rewrites what the profile redirects and refuses what the profile does not allow."""
+    """The configured HTTP proxy; its routing and allowlist apply only to traffic sent through it."""
     context = assets / GATEWAY_SERVICE
     context.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(TEMPLATES / "gateway.py", context / "gateway.py")
@@ -306,6 +312,12 @@ def _served(profile_path: Path, repositories: Iterable[Repository]) -> dict[str,
     The name is the resolved directory's, so `../..` serves the directory it points at, not a repository called `..`.
     """
     resolved = [_resolved(profile_path, repository) for repository in repositories]
+    if len({path.name for path in resolved}) != len(resolved):
+        raise DigitalTwinUniverseError(
+            "repository-name-collision",
+            "Served repositories have the same directory name and would overwrite one another.",
+            "Use checkout directories with distinct names before publishing them together.",
+        )
     return {path.name: path for path in resolved}
 
 

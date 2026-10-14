@@ -154,7 +154,8 @@ def _profile_error(path: Path, error: DockerException) -> DigitalTwinUniverseErr
         return DigitalTwinUniverseError(
             "env-missing",
             f"{path} needs the environment variable {name}, which is not set: {message}",
-            f"Export {name} on the host before launching; it is read at launch and never written to a file.",
+            f"Export {name} on the host before launching. Runtime environment is excluded from saved build definitions; "
+            "explicit build arguments remain saved inputs.",
         )
     return DigitalTwinUniverseError(
         "profile-invalid",

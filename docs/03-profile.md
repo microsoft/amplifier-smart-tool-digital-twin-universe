@@ -50,7 +50,7 @@ services:
   copilot:
     # The Dockerfile beside this file, built with the universe's network up.
     build: .
-    # Read from the host at launch, never written to any file. Unset, it fails with this message.
+    # Runtime environment is excluded from DTU's saved build definition. Unset, this fails with its message.
     environment:
       GH_TOKEN: ${GH_TOKEN:?run `export GH_TOKEN=$(gh auth token)` on the host}
     # Keeps the twin up for exec.
@@ -131,7 +131,7 @@ The twin is not told its name. Requests arrive with the `Host` header the client
 
 Local git repositories served from inside the universe, so the twin can clone and install them from the URL they will have once released. Each has:
 
-- `path`: a repository on the host, relative to the profile. Every local branch and tag is served. The checked-out branch is the default and carries the working tree, so uncommitted changes are tested too, and a consumer pinning `@main` still finds `main` while the developer sits on a fix branch. A shallow clone serves only the checked-out branch, as one commit holding the working tree.
+- `path`: a repository or linked worktree root on the host, relative to the profile. A self-contained snapshot serves every local branch and tag; the checked-out branch carries current tracked and nonignored untracked files, with deletions preserved. Symlinks retain their text, and submodules retain their gitlinks without traversal. A shallow clone serves only the checked-out branch as one commit. Source Git configuration, hooks, and clean/smudge filters are not copied or executed.
 - `url`: optional. The URL the repository stands in for, such as `https://github.com/microsoft/amplifier-core`. A trailing `.git` or `/` is ignored. Without `url`, the repository is reachable only at the git server's own address, `http://git:3000/dtu/<repo>`.
 
 A request matches a `url` when the host is the same and the path, with a `.git` at the repository boundary ignored, is the `url` path or continues from it with `/`. Query and fragment take no part, and the comparison ignores case, as GitHub and Gitea both do. So `https://github.com/microsoft/amplifier` matches every way a tool reaches that repository over its host:
@@ -185,19 +185,31 @@ The twin then calls `https://api.openai.com` with no configuration change and re
 
 ### `allow`
 
-Optional. Hostnames the universe may reach. When present, everything else is refused at the gateway, and the refusal is in the gateway's logs. Served and rewritten hosts are always allowed.
+Optional. Hostnames the proxy accepts. When present, other proxied requests are refused at the gateway and logged. Served and rewritten hosts are always allowed.
+
+This filters traffic sent through the configured HTTP proxy. It does not enforce a network boundary: clients
+can ignore the proxy, and builds use host networking. An empty list means no proxy filtering. Treat profiles
+as trusted Compose inputs; validation does not make privileged services or host mounts safe for untrusted code.
 
 ## What `launch` adds
 
 The overlay, rendered into the universe's state directory and run as a second `-f` file, never edits the profile:
 
-- A `git` service when `repositories` is set: Gitea, at `http://git:3000/dtu/<name>`. Each repository is copied from its read-only mount, its working tree committed in the copy, and pushed in. The host checkout is never written to, and its own hooks never run.
-- A `gateway` service when any `repositories[].url`, `rewrites`, or `allow` is set. It is the only route out. It terminates TLS for the hosts it rewrites, with a certificate authority it mints on first start, and tunnels every other host through untouched, with that host's real certificate. An `allow` list is the exception: refusing a request means reading it, so every host is terminated when one is set.
+- A `git` service when `repositories` is set: Gitea, at `http://git:3000/dtu/<name>`. The host exports a private bare snapshot, which is mounted read-only and pushed into Gitea. The original checkout is never mounted or changed. `overlay/repositories/<name>.snapshot.json` records the source HEAD/branch and exact snapshot tree/commit. Detected concurrent edits fail instead of silently retrying.
+- A `gateway` service when any `repositories[].url`, `rewrites`, or `allow` is set. It handles configured proxy traffic. It terminates TLS for the hosts it rewrites, with a certificate authority it mints on first start, and tunnels other hosts with their real certificates. With `allow`, every proxied host is terminated so the gateway can refuse requests.
 - On every service when the gateway is present: the authority mounted at `/etc/dtu/ca.crt` and named in `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `GIT_SSL_CAINFO`, `NODE_EXTRA_CA_CERTS`, `PIP_CERT`, and `CURL_CA_BUNDLE`, with `UV_NATIVE_TLS=true` so uv uses it and `NODE_USE_ENV_PROXY=1` so Node uses the proxy at all; the gateway in `HTTP_PROXY` and `HTTPS_PROXY` with `NO_PROXY=localhost,127.0.0.1,::1,git,gateway`; `UV_NO_GITHUB_FAST_PATH=true` when a `github.com` URL is rewritten; and `depends_on` on what the universe provides.
 - On every service that builds: the proxy as `build.args`, which BuildKit passes to `RUN` without being asked, and the authority as the `dtu-ca` build context, which a Dockerfile has to copy from. See below. A service that names no `image` is given `<id>-<service>`, the name Compose would choose, so the image `launch` builds is the one Compose runs.
 - One network the whole universe shares.
 
 The mounted authority is the public roots with the universe's own appended, because every variable that names a bundle replaces the trust store rather than adding to it. A tunnelled host and a rewritten host both verify.
+
+Saved `bake.yaml` contains only selected build definitions and referenced build-secret file/environment names,
+with mode 0600. Runtime environment and unrelated service settings are excluded. Explicit build arguments
+are still saved build inputs; use file/environment build secrets for sensitive build values. Inline build-secret
+content is rejected before persistence. Repository snapshots need Git and safe no-follow reads (Linux/WSL/macOS);
+native Windows reports `repository-snapshot-unsupported` for this operation. Limits are 100,000 selected files,
+128 MiB per file, 1 GiB selected content, 2 GiB history, 32 MiB metadata, and 120 seconds per Git operation.
+Prepare a smaller explicit checkout when these limits are exceeded. Selected source may itself contain credentials.
 
 The service names `git` and `gateway` are reserved. A profile with no `repositories[].url`, no `rewrites`, and no `allow` renders no gateway, no authority, and no proxy in anyone's environment.
 
