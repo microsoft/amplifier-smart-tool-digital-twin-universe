@@ -245,6 +245,13 @@ def harness(state_root: Path, make_repository: MakeRepository, monkeypatch: pyte
         ),
     )
     final = project / ".agents" / "digital-twin-universe" / NAME
+
+    def allocate(final: Path) -> Path:
+        path = final.with_name(f"{NAME}.draft")
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    monkeypatch.setattr(create_module, "_allocate_draft", allocate)
     return Harness(project, universes, final.with_name(f"{NAME}.draft"), final)
 
 

@@ -51,7 +51,7 @@ def pull_files(id: str, source: str, destination: Path) -> Transfer:
 
 def _copy(id: str, source: Path | tuple[str, str], destination: Path | tuple[str, str]) -> None:
     try:
-        compose_client().container.copy(source, destination)
+        compose_client(id).container.copy(source, destination)
     except (ClientNotFoundError, DockerException) as error:
         translated = translate_docker_error(error)
         if translated is not None:

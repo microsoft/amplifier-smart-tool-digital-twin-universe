@@ -7,7 +7,12 @@ from python_on_whales import ClientNotFoundError, DockerClient
 from python_on_whales.exceptions import DockerException
 
 from digital_twin_universe.capabilities.universe import state
-from digital_twin_universe.capabilities.universe.compose import PROJECT_LABEL, compose_client, translate_docker_error
+from digital_twin_universe.capabilities.universe.compose import (
+    PROJECT_LABEL,
+    compose_client,
+    record_host,
+    translate_docker_error,
+)
 from digital_twin_universe.schemas import Destroyed
 
 # A process running as PID 1 gets no default SIGTERM handler, so `sleep infinity`, `python -m http.server`, and
@@ -17,9 +22,22 @@ STOP_TIMEOUT_SECONDS = 1
 
 
 def destroy(id: str) -> Destroyed:
+    with state.lifecycle_lock(id):
+        receipt = state.cleanup_receipt(id)
+        if receipt is not None:
+            record, result = receipt
+            record_host(record)
+            if not record.state_path.exists():
+                return result.model_copy(update={"state_removed": True})
+        return _destroy_owned(id)
+
+
+def _destroy_owned(id: str) -> Destroyed:
     """Take down the project and forget it only when every owned resource is observed absent."""
     record = state.read(id)
     client = compose_client(id)
+    record.phase = "destroying"
+    state.write(record)
     inventories = _inventories(client, id)
     try:
         before = {kind: inventory() for kind, inventory in inventories.items()}
@@ -45,6 +63,9 @@ def destroy(id: str) -> Destroyed:
     )
     state_removed = False
     if outcome == "removed":
+        state.remember_cleanup(
+            record, Destroyed(id=id, removed=removed, outcome="removed", remaining=remaining, state_removed=False)
+        )
         state.remove(id)
         state_removed = not record.state_path.exists()
         if not state_removed:

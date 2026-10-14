@@ -7,6 +7,8 @@ from python_on_whales import ClientNotFoundError, DockerClient
 from python_on_whales.components.container.cli_wrapper import Container
 from python_on_whales.exceptions import DockerException, NoSuchContainer
 
+from digital_twin_universe.capabilities.universe import state
+from digital_twin_universe.capabilities.universe.runtime import CURRENT
 from digital_twin_universe.capabilities.universe.state import UniverseRecord
 from digital_twin_universe.schemas import (
     DigitalTwinUniverseError,
@@ -28,7 +30,28 @@ def compose_client(
 ) -> DockerClient:
     """A Docker client scoped to one Compose project. With only a project name, Compose finds the stack by label."""
     files: list[str | Path] = list(compose_files or [])
-    return DockerClient(compose_project_name=project, compose_files=files, compose_profiles=list(profiles or []))
+    host = CURRENT.get().docker_host
+    if project is not None and (state.root() / project / state.RECORD_FILE).is_file():
+        record = state.read(project)
+        host = record_host(record)
+        lifecycle = record.state_path / state.LIFECYCLE_FILE
+        if not files and lifecycle.is_file():
+            files = [lifecycle]
+    return DockerClient(
+        host=host, compose_project_name=project, compose_files=files, compose_profiles=list(profiles or [])
+    )
+
+
+def record_host(record: UniverseRecord) -> str | None:
+    requested = CURRENT.get().docker_host
+    if requested and record.docker_host and requested != record.docker_host:
+        raise DigitalTwinUniverseError(
+            "docker-endpoint-mismatch",
+            f"Universe {record.id} belongs to a different Docker endpoint.",
+            "Use the endpoint retained in its ownership record; do not retarget the environment.",
+            universe_id=record.id,
+        )
+    return record.docker_host or requested
 
 
 def docker_unavailable() -> DigitalTwinUniverseError:
@@ -100,18 +123,23 @@ def measure(record: UniverseRecord, containers: list[Container] | None = None) -
         description=record.description,
         profile_path=record.profile_path,
         twin_machine=record.twin_machine,
-        state=universe_state(services),
+        state=universe_state(services, record.expected_services or [record.twin_machine]),
         services=services,
         urls=urls(twin.network_settings.ports or {}, record.urls) if twin is not None else [],
         state_path=record.state_path,
         created_at=record.created_at,
+        operation_id=record.operation_id,
+        phase=record.phase,
+        expected_services=record.expected_services,
     )
 
 
-def universe_state(services: list[Service]) -> UniverseState:
+def universe_state(services: list[Service], expected: list[str] | None = None) -> UniverseState:
     """Running when everything is up and healthy, starting while any is becoming so, degraded when any has failed."""
     if not any(service.state == "running" for service in services):
         return "stopped"
+    if expected and set(expected) - {service.name for service in services}:
+        return "degraded"
     if any(service.state != "running" or service.health == "unhealthy" for service in services):
         return "degraded"
     if any(service.health == "starting" for service in services):

@@ -54,7 +54,7 @@ def test_ids_carry_the_profile_name_and_differ_between_launches() -> None:
     first, second = state.new_id("demo"), state.new_id("demo")
 
     assert first.startswith("dtu-demo-")
-    assert len(first) == len("dtu-demo-") + 4
+    assert len(first) == len("dtu-demo-") + 32
     assert first != second
 
 
@@ -197,7 +197,7 @@ def test_launch_failures_are_named_from_compose_output(stderr: bytes, code: str,
 
 
 def test_an_unhealthy_container_is_named_with_its_logs(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(launch_module, "_container_logs", lambda container: f"logs of {container}")
+    monkeypatch.setattr(launch_module, "_container_logs", lambda container, id=None: f"logs of {container}")
     error = DockerException(["docker", "compose", "up"], 1, stderr=b"container dtu-demo-0000-app-1 is unhealthy")
 
     translated = launch_module._launch_error(_record(), 12, error)
@@ -218,7 +218,13 @@ def test_exec_prints_the_result_and_exits_with_the_commands_code(monkeypatch: py
     result = runner.invoke(app, ["exec", "--id", "dtu-demo-0000", "--command", "false", "--user", "root"])
 
     assert result.exit_code == 7
-    assert json.loads(result.stdout) == {"exit_code": 7, "stdout": "out\n", "stderr": "err\n"}
+    assert json.loads(result.stdout) == {
+        "exit_code": 7,
+        "stdout": "out\n",
+        "stderr": "err\n",
+        "stdout_truncated": False,
+        "stderr_truncated": False,
+    }
     assert seen == {"id": "dtu-demo-0000", "command": "false", "user": "root", "workdir": None, "timeout_seconds": 300}
 
 

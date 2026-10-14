@@ -1,5 +1,7 @@
 """Launch: from a profile to a running, ready universe."""
 
+from contextlib import suppress
+import hashlib
 from pathlib import Path
 import re
 import sys
@@ -10,9 +12,10 @@ from python_on_whales.exceptions import DockerException
 from python_on_whales.utils import stream_stdout_and_stderr
 import yaml
 
-from digital_twin_universe.capabilities.universe import overlay, state
+from digital_twin_universe.capabilities.universe import overlay, runtime, state
 from digital_twin_universe.capabilities.universe import validate as validate_module
 from digital_twin_universe.capabilities.universe.compose import compose_client, measure, translate_docker_error
+from digital_twin_universe.capabilities.universe.profile import Profile
 from digital_twin_universe.capabilities.universe.state import UniverseRecord
 from digital_twin_universe.schemas import DigitalTwinUniverseError, ProfileReport, Universe
 
@@ -29,29 +32,130 @@ BUILDX_VERSION_PATTERN = re.compile(r"\bv(?P<major>\d+)\.(?P<minor>\d+)")
 BAKE_ALLOW_VERSION = (0, 17)
 
 
-def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe:
-    """Validate the profile, record the universe, bring the stack up, and return once every healthcheck passes."""
-    validation = validate_module.validate(profile)
-    if validation.unreadable is not None:
-        raise validation.unreadable
-    if validation.profile is None:
-        raise _profile_invalid(validation.report)
-    loaded = validation.profile
-    record = UniverseRecord(
-        id=state.new_id(loaded.name),
-        name=loaded.name,
-        description=loaded.description,
-        profile_path=loaded.path,
-        twin_machine=loaded.twin_machine,
-        created_at=state.now(),
-        urls=loaded.x_dtu.urls,
-    )
-    state.write(record)
+def launch(profile: str | Path, timeout_seconds: int = 600, operation_id: str | None = None) -> Universe:
+    """Allocate one owned launch. A repeated operation observes its attempt and never repeats effects."""
+    id = state.new_id("launch", operation_id)
+    with state.lifecycle_lock(id):
+        existing = state.root() / id / state.RECORD_FILE
+        if existing.is_file():
+            record = state.read(id)
+            if (
+                operation_id is None
+                or record.operation_id != operation_id
+                or (record.request_profile is not None and record.request_profile != str(profile))
+            ):
+                raise DigitalTwinUniverseError(
+                    "operation-conflict",
+                    "Launch identity is already owned.",
+                    "Inspect the existing receipt.",
+                    id,
+                    operation_id,
+                )
+            if record.phase == "ready":
+                return measure(record)
+            raise DigitalTwinUniverseError(
+                "operation-incomplete",
+                f"Launch {id} is {record.phase}; its effects are not replayed.",
+                "Inspect status, stop, or remove this environment. Use a new operation id only for explicitly requested new work.",
+                id,
+                operation_id,
+            )
+        if state.cleanup_receipt(id) is not None:
+            raise DigitalTwinUniverseError(
+                "operation-removed",
+                f"Environment {id} was already removed.",
+                "Use a new operation id for a newly requested environment.",
+                id,
+                operation_id,
+            )
+        validation = validate_module.validate(profile)
+        if validation.unreadable is not None:
+            raise validation.unreadable
+        if validation.profile is None:
+            raise _profile_invalid(validation.report)
+        loaded = validation.profile
+        host = runtime.docker_host()
+        with runtime.configured(runtime.CURRENT.get().model_copy(update={"docker_host": host})):
+            scoped = compose_client(id, [loaded.path]).compose.config(return_json=True)
+        checked = validate_module._validated(loaded.path, scoped)
+        if checked.profile is None:
+            raise _profile_invalid(checked.report)
+        loaded = checked.profile._replace(name=loaded.name)
+        record = UniverseRecord(
+            id=id,
+            name=loaded.name,
+            description=loaded.description,
+            profile_path=loaded.path,
+            twin_machine=loaded.twin_machine,
+            created_at=state.now(),
+            urls=loaded.x_dtu.urls,
+            operation_id=operation_id,
+            phase="allocated",
+            docker_host=host,
+            expected_services=list(loaded.services),
+            profile_digest=hashlib.sha256(loaded.path.read_bytes()).hexdigest(),
+            request_profile=str(profile),
+        )
+        try:
+            state.allocate(record)
+        except FileExistsError as error:
+            raise DigitalTwinUniverseError(
+                "operation-incomplete",
+                f"Allocation {id} already exists without a readable receipt.",
+                "Preserve and inspect it before cleanup; do not replay this operation.",
+                id,
+                operation_id,
+            ) from error
+        except OSError as error:
+            raise DigitalTwinUniverseError(
+                "allocation-failed",
+                f"Could not persist the ownership record for {id}.",
+                "Inspect the state directory before retrying; Docker has not been started.",
+                id,
+                operation_id,
+            ) from error
+        try:
+            _lifecycle_definition(record, loaded)
+            return _launch_owned(record, loaded, timeout_seconds)
+        except (ClientNotFoundError, DockerException) as error:
+            _mark_failed(record)
+            failure = _launch_error(record, timeout_seconds, error)
+            failure.universe_id, failure.operation_id = id, operation_id
+            raise failure from error
+        except Exception as error:
+            _mark_failed(record)
+            if isinstance(error, DigitalTwinUniverseError):
+                error.universe_id, error.operation_id = id, operation_id
+                raise
+            raise DigitalTwinUniverseError(
+                "launch-failed",
+                f"Launch {id} failed while preparing its owned environment: {type(error).__name__}.",
+                "Inspect the retained state; no automatic replay was attempted.",
+                id,
+                operation_id,
+            ) from error
+
+
+def _mark_failed(record: UniverseRecord) -> None:
+    record.phase = "failed"
+    # Keep the original failure and exact owner when storage itself has become unavailable.
+    with suppress(OSError):
+        state.write(record)
+
+
+def _launch_owned(record: UniverseRecord, loaded: Profile, timeout_seconds: int) -> Universe:
     rendered = overlay.render(record, loaded)
-    client = compose_client(record.id, [loaded.path, *rendered.files])
+    record.expected_services = list(dict.fromkeys([*loaded.services, *rendered.bootstrap]))
+    _lifecycle_definition(record, loaded)
+    record.phase = "launching"
+    state.write(record)
+    # The resolved config is consumed once, so mutable profile files cannot change this launch after validation.
+    # It can contain credentials: private permissions and finally cleanup limit exposure, but a killed process
+    # can leave it behind. Recovery never loads or replays this file.
+    definition = record.state_path / "launch.private.yaml"
+    state.atomic_text(definition, yaml.safe_dump(_literal_compose(loaded.config), sort_keys=False))
     try:
-        # What the universe provides comes up first, so that the certificate authority exists before anything is
-        # built with it and the git server answers before a build or a command clones from it.
+        client = compose_client(record.id, [definition, *rendered.files])
         if rendered.bootstrap:
             _up(client, record, timeout_seconds, services=rendered.bootstrap)
             overlay.export_ca(record, rendered)
@@ -59,9 +163,35 @@ def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe:
         if buildx is not None:
             _bake(client, record, rendered.gateway_builds, grant=buildx >= BAKE_ALLOW_VERSION)
         _up(client, record, timeout_seconds, build=buildx is None)
-    except (ClientNotFoundError, DockerException) as error:
-        raise _launch_error(record, timeout_seconds, error) from error
-    return measure(record)
+        record.phase = "ready"
+        state.write(record)
+        return measure(record)
+    finally:
+        definition.unlink(missing_ok=True)
+
+
+def _literal_compose(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.replace("$", "$$")
+    if isinstance(value, list):
+        return [_literal_compose(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _literal_compose(item) for key, item in value.items()}
+    return value
+
+
+def _lifecycle_definition(record: UniverseRecord, loaded: Profile) -> None:
+    config: dict[str, Any] = {"services": {name: {"image": "scratch"} for name in record.expected_services}}
+    for kind in ("networks", "volumes"):
+        definitions = loaded.config.get(kind) or {}
+        if definitions:
+            config[kind] = {
+                name: {key: value for key, value in (definition or {}).items() if key in ("name", "external")}
+                for name, definition in definitions.items()
+            }
+    state.atomic_text(
+        record.state_path / state.LIFECYCLE_FILE, yaml.safe_dump(_literal_compose(config), sort_keys=False)
+    )
 
 
 def _up(
@@ -169,7 +299,7 @@ def _launch_error(record: UniverseRecord, timeout_seconds: int, error: Exception
         return DigitalTwinUniverseError(
             "unhealthy",
             f"Container {container} of universe {record.id} failed its healthcheck. Its last log lines:\n"
-            f"{_container_logs(container)}",
+            f"{_container_logs(container, record.id)}",
             f"Fix what the healthcheck in {record.profile_path} probes, or the healthcheck itself. {left_running}",
         )
     if TIMEOUT_MARKER in stderr:
@@ -186,9 +316,9 @@ def _launch_error(record: UniverseRecord, timeout_seconds: int, error: Exception
     )
 
 
-def _container_logs(container: str) -> str:
+def _container_logs(container: str, id: str | None = None) -> str:
     try:
-        return str(compose_client().container.logs(container, tail=LOG_TAIL)).strip()
+        return str(compose_client(id).container.logs(container, tail=LOG_TAIL)).strip()
     except DockerException as error:
         return f"(logs unavailable: {(error.stderr or '').strip()})"
 

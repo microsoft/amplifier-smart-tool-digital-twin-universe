@@ -356,6 +356,33 @@ def file_pull(
     typer.echo(lib.pull_files(id, source, destination).model_dump_json(indent=2))
 
 
+@app.command("export-files")
+def export_files(
+    id: Annotated[str, typer.Option(help="The universe id launch printed.")],
+    source: Annotated[str, typer.Option(help="An absolute path inside the owned twin.")],
+    destination: Annotated[Path, typer.Option(help="A new archive file on the host; never overwritten.")],
+    max_bytes: Annotated[int, typer.Option(min=1, max=17179869184, help="Maximum archive bytes.")] = 268435456,
+    timeout_seconds: Annotated[int, typer.Option(min=1, max=3600, help="Export deadline in seconds.")] = 60,
+) -> None:
+    """Export a bounded archive from a running or stopped twin without extracting it. Deterministic."""
+    typer.echo(lib.export_files(id, source, destination, max_bytes, timeout_seconds).model_dump_json(indent=2))
+
+
+@app.command()
+def stop(
+    id: Annotated[str, typer.Option(help="The universe id launch printed.")],
+    timeout_seconds: Annotated[int, typer.Option(min=1, max=300, help="Shutdown grace period in seconds.")] = 10,
+) -> None:
+    """Stop container work and retain the environment and its data. Deterministic.
+
+    Prints observed stop results as JSON; exits 1 when cessation could not be confirmed.
+    """
+    result = lib.stop(id, timeout_seconds=timeout_seconds)
+    typer.echo(result.model_dump_json(indent=2))
+    if not result.complete:
+        raise typer.Exit(1)
+
+
 @app.command()
 def destroy(id: Annotated[str, typer.Option(help="The universe id `launch` printed.")]) -> None:
     """Remove a universe: its containers, networks, volumes, and state. Built images stay. Deterministic.

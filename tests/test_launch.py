@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -212,6 +213,16 @@ def test_only_a_gateway_universe_with_buildx_builds_before_compose(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     profile = _profile(x_dtu)
+    entry = state_root / "profile.yaml"
+    entry.write_text("name: demo\nservices: {}\n")
+    profile = profile._replace(path=entry)
+    monkeypatch.setattr(launch_module.runtime, "docker_host", lambda: "unix:///fixture.sock")
+    monkeypatch.setattr(
+        launch_module,
+        "compose_client",
+        lambda *args, **kwargs: SimpleNamespace(compose=SimpleNamespace(config=lambda **kwargs: profile.config)),
+    )
+    monkeypatch.setattr(validate_module, "_validated", lambda path, config: validate_module.Validation(report, profile))
     report = ProfileReport(
         path=PROFILE_PATH, name="demo", twin_machine="app", services=profile.services, ok=True, errors=[], warnings=[]
     )
