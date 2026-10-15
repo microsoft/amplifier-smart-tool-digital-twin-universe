@@ -242,6 +242,19 @@ def test_foreign_reference_preserves_container_and_receipt_for_inspection(harnes
     assert harness.record.state_path.is_dir()
 
 
+@pytest.mark.parametrize("config", [None, SimpleNamespace(volumes={})])
+def test_unclassified_implicit_volume_preserves_container_and_state(harness: Harness, config: Any) -> None:
+    harness.anonymous()
+    harness.client.image.inspect = lambda id: SimpleNamespace(config=config)
+    result = lib.destroy(harness.id, harness.config)
+    assert result.outcome == "unknown"
+    assert not result.complete
+    assert harness.down_calls == 0
+    assert harness.containers
+    assert harness.volumes.removed == []
+    assert harness.record.state_path.is_dir()
+
+
 @pytest.mark.parametrize("change", ["replacement", "foreign-attachment", "inspection-fails"])
 def test_changed_or_uninspectable_anonymous_volume_is_retained(harness: Harness, change: str) -> None:
     volume, container = harness.anonymous()

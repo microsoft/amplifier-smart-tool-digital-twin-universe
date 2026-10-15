@@ -119,13 +119,13 @@ def capture(client: DockerClient, record: state.UniverseRecord, external: set[st
                 str(spec.target) == mount.destination for spec in (host.mounts or [])
             ):
                 continue
-            if image is None:
-                image = client.image.inspect(container.image)
-            if image.config is None or mount.destination not in (image.config.volumes or {}):
-                continue
             value = identity(client, mount.name)
             if value.project == record.id:
                 continue  # The ordinary labeled-volume inventory owns this one.
+            if image is None:
+                image = client.image.inspect(container.image)
+            if image.config is None or mount.destination not in (image.config.volumes or {}):
+                raise ValueError("Implicit volume origin is uncertain; its container was preserved")
             if not _anonymous(value):
                 raise ValueError("Image volume provenance is uncertain; its container was preserved")
             refs = client.container.list(all=True, filters=[("volume", value.name)])
