@@ -98,3 +98,87 @@ def test_failed_launch_cleanup_preserves_peer_data_and_removes_owned_resources(t
             with suppress(NoSuchVolume):
                 assert client.volume.inspect(name).labels[fixture_label] == token
                 client.volume.remove(name)
+
+
+def test_image_anonymous_volume_is_removed_while_explicit_hex_named_volume_is_preserved(tmp_path: Path) -> None:
+    token = uuid4().hex
+    image_name = f"dtu-cleanup-image-{token}"
+    peer_name = uuid4().hex + uuid4().hex
+    endpoint = json.loads(
+        subprocess.check_output(
+            ["docker", "context", "inspect", "--format", "{{json .Endpoints.docker.Host}}"],
+            text=True,
+            timeout=15,
+        )
+    )
+    config = BackendConfig(state_root=tmp_path / "state", docker_host=endpoint)
+    client = DockerClient(host=endpoint)
+    client.volume.create(peer_name)
+    (tmp_path / "Dockerfile").write_text(
+        f'FROM alpine:3.20\nLABEL org.digital-twin-universe.cleanup-test="{token}"\nVOLUME ["/data"]\n'
+    )
+    profile = tmp_path / "compose.yaml"
+    service = {
+        "image": image_name,
+        "build": str(tmp_path),
+        "command": ["sleep", "3600"],
+        "healthcheck": {"test": ["CMD", "true"], "interval": "1s"},
+        "network_mode": "none",
+    }
+    profile.write_text(
+        yaml.safe_dump(
+            {
+                "name": "image-volume-test",
+                "services": {
+                    "twin": service,
+                    "peerdata": {**service, "volumes": ["peer:/data"]},
+                },
+                "volumes": {"peer": {"name": peer_name, "external": True}},
+                "x-dtu": {"twin_machine": "twin"},
+            }
+        )
+    )
+    universe = None
+    anonymous = None
+    try:
+        universe = lib.launch(profile, config=config)
+        containers = client.container.list(all=True, filters=[("label", f"{PROJECT_LABEL}={universe.id}")])
+        mounts = {
+            (container.config.labels or {})["com.docker.compose.service"]: container.mounts for container in containers
+        }
+        name = next(mount.name for mount in mounts["twin"] if mount.destination == "/data")
+        assert name is not None
+        assert name != peer_name
+        anonymous = client.volume.inspect(name)
+        (tmp_path / "owned-image-volume.json").write_text(
+            json.dumps(
+                {
+                    "universe": universe.id,
+                    "name": name,
+                    "createdAt": anonymous.created_at.isoformat(),
+                    "containers": [container.id for container in containers],
+                }
+            )
+        )
+        result = lib.destroy(universe.id, config)
+        assert result.complete, result.model_dump_json()
+        assert name in result.removed
+        with pytest.raises(NoSuchVolume):
+            client.volume.inspect(name)
+        assert client.volume.inspect(peer_name).name == peer_name
+        assert lib.destroy(universe.id, config).complete
+    finally:
+        if universe is not None and universe.id in lib.recorded_ids(config):
+            lib.destroy(universe.id, config)
+        if anonymous is not None:
+            with suppress(NoSuchVolume):
+                current = client.volume.inspect(anonymous.name)
+                assert current.created_at == anonymous.created_at
+                assert not client.container.list(all=True, filters=[("volume", current.name)])
+                client.volume.remove(current.name)
+        with suppress(NoSuchVolume):
+            assert not client.container.list(all=True, filters=[("volume", peer_name)])
+            client.volume.remove(peer_name)
+        images = client.image.list(filters=[("label", f"org.digital-twin-universe.cleanup-test={token}")])
+        for image in images:
+            client.image.remove(image.id)

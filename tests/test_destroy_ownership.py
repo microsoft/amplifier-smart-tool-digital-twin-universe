@@ -10,7 +10,7 @@ import pytest
 from python_on_whales.exceptions import DockerException, NoSuchNetwork, NoSuchVolume
 
 from digital_twin_universe import lib
-from digital_twin_universe.capabilities.universe import destroy, runtime, state
+from digital_twin_universe.capabilities.universe import cleanup_volumes, destroy, runtime, state
 from digital_twin_universe.capabilities.universe.compose import PROJECT_LABEL
 from digital_twin_universe.schemas import BackendConfig
 
@@ -62,18 +62,43 @@ class Harness:
         self.networks = Resources("network", [])
         self.after_down: Callable[[], None] = lambda: None
         self.down_calls = 0
-        client = SimpleNamespace(
+        self.containers: dict[str, SimpleNamespace] = {}
+        self.client = SimpleNamespace(
             compose=SimpleNamespace(down=self.down),
             volume=self.volumes,
             network=self.networks,
-            container=SimpleNamespace(list=lambda **kwargs: []),
+            container=SimpleNamespace(list=self.list_containers, inspect=lambda id: self.containers[id]),
+            image=SimpleNamespace(inspect=lambda id: SimpleNamespace(config=SimpleNamespace(volumes={"/data": {}}))),
         )
-        monkeypatch.setattr(destroy, "compose_client", lambda id: client)
+        monkeypatch.setattr(destroy, "compose_client", lambda id: self.client)
+
+    def list_containers(self, all: bool, filters: list[tuple[str, str]]) -> list[SimpleNamespace]:
+        kind, value = filters[0]
+        if kind == "volume":
+            return [c for c in self.containers.values() if any(m.name == value for m in c.mounts)]
+        assert kind == "label"
+        key, owner = value.split("=", 1)
+        return [c for c in self.containers.values() if c.config.labels.get(key) == owner]
 
     def down(self, **kwargs: Any) -> None:
         assert kwargs["volumes"] is False
         self.down_calls += 1
+        self.containers = {k: c for k, c in self.containers.items() if c.config.labels[PROJECT_LABEL] != self.id}
         self.after_down()
+
+    def anonymous(self) -> tuple[SimpleNamespace, SimpleNamespace]:
+        volume = self.volume("a" * 64)
+        volume.labels = {}
+        container = SimpleNamespace(
+            id="b" * 64,
+            name="owned-twin",
+            image="sha256:" + "c" * 64,
+            config=SimpleNamespace(labels={PROJECT_LABEL: self.id}),
+            host_config=SimpleNamespace(binds=[], mounts=[], volumes_from=[]),
+            mounts=[SimpleNamespace(type="volume", name=volume.name, destination="/data")],
+        )
+        self.containers[container.id] = container
+        return volume, container
 
     def volume(self, name: str, owner: str | None = None) -> SimpleNamespace:
         result = SimpleNamespace(
@@ -165,4 +190,112 @@ def test_disappeared_volume_is_already_removed(harness: Harness) -> None:
     harness.volume("data")
     harness.after_down = lambda: harness.volumes.resources.clear()
     assert lib.destroy(harness.id, harness.config).complete
+    assert harness.volumes.removed == []
+
+
+def test_image_volume_provenance_is_durable_before_container_removal(harness: Harness) -> None:
+    volume, _ = harness.anonymous()
+
+    def inspect_receipt() -> None:
+        receipt = cleanup_volumes.Receipt.model_validate_json(
+            (harness.record.state_path / cleanup_volumes.RECEIPT_FILE).read_text()
+        )
+        assert receipt.candidates[volume.name].identity.created_at == volume.created_at
+        assert receipt.candidates[volume.name].mounts[0].container_id == "b" * 64
+
+    harness.after_down = inspect_receipt
+    assert lib.destroy(harness.id, harness.config).complete
+    assert harness.volumes.removed == [volume.name]
+
+
+@pytest.mark.parametrize("source", ["bind", "mount", "inherited", "external"])
+def test_explicit_or_inherited_image_destination_does_not_authorize_volume_removal(
+    harness: Harness, source: str
+) -> None:
+    volume, container = harness.anonymous()
+    if source == "bind":
+        container.host_config.binds = [f"{volume.name}:/data:rw"]
+    elif source == "mount":
+        container.host_config.mounts = [SimpleNamespace(source=volume.name, target=Path("/data"))]
+    elif source == "inherited":
+        container.host_config.volumes_from = ["peer-container"]
+    else:
+        (harness.record.state_path / state.LIFECYCLE_FILE).write_text(
+            f"services: {{twin: {{image: scratch}}}}\nvolumes: {{keep: {{external: true, name: {volume.name}}}}}\n"
+        )
+    assert lib.destroy(harness.id, harness.config).complete
+    assert harness.volumes.removed == []
+    assert volume.name in harness.volumes.resources
+
+
+def test_foreign_reference_preserves_container_and_receipt_for_inspection(harness: Harness) -> None:
+    _, container = harness.anonymous()
+    peer = SimpleNamespace(**vars(container))
+    peer.id = "d" * 64
+    peer.config = SimpleNamespace(labels={PROJECT_LABEL: "peer"})
+    harness.containers[peer.id] = peer
+    result = lib.destroy(harness.id, harness.config)
+    assert result.outcome == "unknown"
+    assert not result.complete
+    assert harness.down_calls == 0
+    assert harness.volumes.removed == []
+    assert harness.record.state_path.is_dir()
+
+
+@pytest.mark.parametrize("change", ["replacement", "foreign-attachment", "inspection-fails"])
+def test_changed_or_uninspectable_anonymous_volume_is_retained(harness: Harness, change: str) -> None:
+    volume, container = harness.anonymous()
+
+    def change_after_down() -> None:
+        if change == "replacement":
+            volume.created_at += timedelta(seconds=1)
+        elif change == "foreign-attachment":
+            container.config.labels[PROJECT_LABEL] = "peer"
+            harness.containers[container.id] = container
+        else:
+
+            def fail(**kwargs: Any) -> list[SimpleNamespace]:
+                raise DockerException(["docker", "ps"], 1, stderr=b"cannot inspect references")
+
+            harness.client.container.list = fail
+
+    harness.after_down = change_after_down
+    result = lib.destroy(harness.id, harness.config)
+    assert not result.complete
+    assert result.remaining["volumes"] == [volume.name]
+    assert f"volume:{volume.name}" in result.errors
+    assert harness.volumes.removed == []
+    assert harness.record.state_path.is_dir()
+
+
+def test_lost_process_after_down_recovers_only_durable_volume_identity(harness: Harness) -> None:
+    volume, _ = harness.anonymous()
+
+    def crash() -> None:
+        raise RuntimeError("process lost after down")
+
+    harness.after_down = crash
+    with pytest.raises(RuntimeError, match="process lost"):
+        lib.destroy(harness.id, harness.config)
+    assert not harness.containers
+    assert volume.name in harness.volumes.resources
+    harness.after_down = lambda: None
+    assert lib.destroy(harness.id, harness.config).complete
+    assert harness.volumes.removed == [volume.name]
+
+
+def test_failed_provenance_write_prevents_container_removal(harness: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
+    harness.anonymous()
+    atomic = state.atomic_text
+
+    def fail(path: Path, text: str) -> None:
+        if path.name == cleanup_volumes.RECEIPT_FILE:
+            raise OSError("disk full")
+        atomic(path, text)
+
+    monkeypatch.setattr(state, "atomic_text", fail)
+    result = lib.destroy(harness.id, harness.config)
+    assert result.outcome == "unknown"
+    assert harness.down_calls == 0
+    assert harness.containers
     assert harness.volumes.removed == []

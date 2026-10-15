@@ -2,6 +2,11 @@
 only when cleanup is confirmed. External and unrelated resources remain, as do built images. A declared
 resource name alone does not authorize deletion.
 
+Image-declared anonymous volumes require a retained exact container mount receipt, unchanged volume identity,
+and no remaining container references. Explicit or inherited sources do not establish anonymous ownership.
+The receipt is saved before containers are removed; failed ownership checks retain the universe for inspection
+and retry. Externally owned data remains.
+
 Use it when you are done with a universe you launched, and after a failed `launch`, which
 leaves what started running for inspection; its remedy names this command. It works on a
 universe in any state, running, degraded, or stopped. Use `stop` to keep the environment and its data.

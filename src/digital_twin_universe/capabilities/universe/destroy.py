@@ -1,16 +1,13 @@
 """Destroy: take a universe down and forget it."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
 from typing import Literal
 
 from python_on_whales import ClientNotFoundError, DockerClient
 from python_on_whales.exceptions import DockerException, NoSuchNetwork, NoSuchVolume
 import yaml
 
-from digital_twin_universe.capabilities.universe import state
+from digital_twin_universe.capabilities.universe import cleanup_volumes, state
 from digital_twin_universe.capabilities.universe.compose import (
     PROJECT_LABEL,
     compose_client,
@@ -47,10 +44,22 @@ def _destroy_owned(id: str) -> Destroyed:
     )
     try:
         before = {kind: inventory() for kind, inventory in inventories.items()}
+        try:
+            anonymous = cleanup_volumes.capture(client, record, _external_resources(record, "volumes"))
+        except (ValueError, OSError) as error:
+            return Destroyed(
+                id=id,
+                removed=[],
+                outcome="unknown",
+                remaining=before,
+                errors={"volumes": str(error)},
+                state_removed=False,
+            )
+        before["volumes"] = sorted(set(before["volumes"]) | set(anonymous.candidates))
         volumes = {}
         for name in before["volumes"]:
             try:
-                volumes[name] = _volume_identity(client, name)
+                volumes[name] = cleanup_volumes.identity(client, name)
             except NoSuchVolume:
                 continue
         networks = {}
@@ -81,9 +90,14 @@ def _destroy_owned(id: str) -> Destroyed:
             errors[f"network:{name}"] = str(translate_docker_error(error) or error)
     for name, identity in volumes.items():
         try:
-            current = _volume_identity(client, name)
-            if current != identity or current.project != id or current.created_at is None:
+            current = cleanup_volumes.identity(client, name)
+            candidate = anonymous.candidates.get(name)
+            expected = candidate.identity if candidate is not None else identity
+            if current != expected or (candidate is None and current.project != id) or current.created_at is None:
                 errors[f"volume:{name}"] = "Volume ownership or identity is uncertain; it was preserved."
+                continue
+            if candidate is not None and client.container.list(all=True, filters=[("volume", name)]):
+                errors[f"volume:{name}"] = "Image volume is still attached to a container; it was preserved."
                 continue
             client.volume.remove(name)
         except NoSuchVolume:
@@ -94,6 +108,8 @@ def _destroy_owned(id: str) -> Destroyed:
     for kind, inventory in inventories.items():
         try:
             names = inventory()
+            if kind == "volumes":
+                names = sorted(set(names) | set(cleanup_volumes.remaining(client, anonymous)))
         except (ClientNotFoundError, DockerException) as error:
             remaining[kind] = None
             errors[kind] = str(translate_docker_error(error) or error)
@@ -149,31 +165,6 @@ def _inventories(
             volume.name for volume in client.volume.list(filters=filters) if volume.name not in external_volumes
         ],
     }
-
-
-@dataclass(frozen=True)
-class _VolumeIdentity:
-    name: str
-    created_at: datetime | None
-    driver: str
-    mountpoint: Path
-    project: str | None
-    labels: dict[str, str]
-    options: dict[str, str]
-
-
-def _volume_identity(client: DockerClient, name: str) -> _VolumeIdentity:
-    volume = client.volume.inspect(name)
-    labels = volume.labels or {}
-    return _VolumeIdentity(
-        volume.name,
-        volume.created_at,
-        volume.driver,
-        volume.mountpoint,
-        labels.get(PROJECT_LABEL),
-        labels,
-        volume.options or {},
-    )
 
 
 def _external_resources(record: state.UniverseRecord, kind: Literal["networks", "volumes"]) -> set[str]:
