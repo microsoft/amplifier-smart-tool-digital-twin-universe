@@ -101,7 +101,7 @@ def _verify_universe() -> None:
     try:
         result = execute_module.execute(universe.id, "echo dtu-ok")
     finally:
-        destroy_module.destroy(universe.id)
+        destroy_module.destroy(universe.id).require_removed()
     if "dtu-ok" not in result.stdout:
         raise DigitalTwinUniverseError(
             "verify-failed",
@@ -160,8 +160,14 @@ def _universes() -> create_module.Universes:
 
 
 def _recorded_ids() -> list[str]:
+    return recorded_ids()
+
+
+def recorded_ids() -> list[str]:
     """Ids of every universe with a record on this machine, read without Docker and cheap enough to poll."""
-    return [path.name for path in state.STATE_ROOT.iterdir()] if state.STATE_ROOT.is_dir() else []
+    if not state.STATE_ROOT.is_dir():
+        return []
+    return sorted(path.name for path in state.STATE_ROOT.iterdir() if (path / state.RECORD_FILE).is_file())
 
 
 def _relocate(id: str, profile_path: Path) -> None:
@@ -218,7 +224,7 @@ def pull_files(id: str, source: str, destination: Path) -> Transfer:
 
 
 def destroy(id: str) -> Destroyed:
-    """Remove a universe: every container, network, and volume, and its state directory. Images stay."""
+    """Take a universe down and observe residue. Forget its state only after verified removal. Images stay."""
     return destroy_module.destroy(id)
 
 

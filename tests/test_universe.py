@@ -298,7 +298,17 @@ def test_file_push_and_pull_pass_their_arguments_through(monkeypatch: pytest.Mon
 
 
 def test_destroy_prints_what_was_removed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(lib, "destroy", lambda id: Destroyed(id=id, removed=[f"{id}-app-1"]))
+    monkeypatch.setattr(
+        lib,
+        "destroy",
+        lambda id: Destroyed(
+            id=id,
+            removed=[f"{id}-app-1"],
+            outcome="removed",
+            remaining={"containers": [], "networks": [], "volumes": []},
+            state_removed=True,
+        ),
+    )
 
     result = runner.invoke(app, ["destroy", "--id", "dtu-demo-0000"])
 

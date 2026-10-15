@@ -246,10 +246,37 @@ class Transfer(BaseModel):
 
 
 class Destroyed(BaseModel):
-    """What `destroy` took down."""
+    """What `destroy` observed after taking a universe down."""
 
     id: str
     removed: list[str] = Field(description="Names of the containers, networks, and volumes taken down")
+    outcome: Literal["removed", "residue", "unknown"] = "unknown"
+    remaining: dict[str, list[str] | None] = Field(
+        default_factory=dict,
+        description="Post-down containers, networks, and volumes by kind; None means inspection failed",
+    )
+    errors: dict[str, str] = Field(default_factory=dict, description="Inspection or state-removal errors by kind")
+    state_removed: bool = False
+
+    @property
+    def complete(self) -> bool:
+        """Cleanup is complete only with all three observed inventories empty and the state gone."""
+        return (
+            self.outcome == "removed"
+            and self.state_removed
+            and not self.errors
+            and self.remaining == {"containers": [], "networks": [], "volumes": []}
+        )
+
+    def require_removed(self) -> None:
+        """Raise a named failure when cleanup is incomplete or has not been observed."""
+        if not self.complete:
+            raise DigitalTwinUniverseError(
+                "cleanup-incomplete",
+                f"Universe {self.id} cleanup is {self.outcome}; remaining: {self.remaining}; "
+                f"state_removed: {self.state_removed}; errors: {self.errors}.",
+                "Resolve the reported errors and inspect the universe's resources and state before claiming cleanup.",
+            )
 
 
 # endregion

@@ -154,7 +154,13 @@ class FakeUniverses:
             raise self.destroy_error
         self.destroyed.append(id)
         state.remove(id)
-        return Destroyed(id=id, removed=[])
+        return Destroyed(
+            id=id,
+            removed=[],
+            outcome="removed",
+            remaining={"containers": [], "networks": [], "volumes": []},
+            state_removed=True,
+        )
 
     def list_universes(self) -> list[Universe]:
         return [self.universe(record) for record in state.read_all()]
@@ -590,7 +596,7 @@ def test_a_failed_destroy_reports_the_universe_and_the_command(harness: Harness)
 
     result = harness.create(agent)
 
-    assert result.outcome == "created"
+    assert result.outcome == "failed"
     assert result.universe_id == "dtu-probe-t001"
     assert result.urls == []
     assert any(
