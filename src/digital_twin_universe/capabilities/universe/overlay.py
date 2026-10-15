@@ -118,6 +118,8 @@ def export_ca(record: UniverseRecord, overlay: Overlay) -> None:
     overlay.ca_path.write_text(
         f"{Path(certifi.where()).read_text(encoding='utf-8')}\n{minted.read_text(encoding='utf-8')}", encoding="utf-8"
     )
+    # This public trust bundle is mounted into twins whose uid can differ from the host owner.
+    overlay.ca_path.chmod(0o644)
     minted.unlink()
 
 

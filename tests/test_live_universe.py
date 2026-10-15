@@ -158,7 +158,7 @@ def test_a_failing_healthcheck_names_the_container_and_leaves_it_for_inspection(
         lib.launch(profile, timeout_seconds=120)
 
     assert raised.value.code == "unhealthy"
-    ids = [path.name for path in state_root.iterdir()]
+    ids = lib.recorded_ids()
     assert len(ids) == 1
     assert ids[0] in raised.value.remedy
     lib.destroy(ids[0])
