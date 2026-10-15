@@ -15,6 +15,7 @@ from digital_twin_universe.capabilities.universe.compose import universe_state, 
 from digital_twin_universe.capabilities.universe.state import UniverseRecord
 from digital_twin_universe.cli import app, main
 from digital_twin_universe.schemas import (
+    BackendConfig,
     Destroyed,
     DigitalTwinUniverseError,
     ExecResult,
@@ -209,7 +210,14 @@ def test_an_unhealthy_container_is_named_with_its_logs(monkeypatch: pytest.Monke
 def test_exec_prints_the_result_and_exits_with_the_commands_code(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}
 
-    def fake_execute(id: str, command: str, user: str | None, workdir: str | None, timeout_seconds: int) -> ExecResult:
+    def fake_execute(
+        id: str,
+        command: str,
+        user: str | None,
+        workdir: str | None,
+        timeout_seconds: int,
+        config: BackendConfig | None = None,
+    ) -> ExecResult:
         seen.update(id=id, command=command, user=user, workdir=workdir, timeout_seconds=timeout_seconds)
         return ExecResult(exit_code=7, stdout="out\n", stderr="err\n")
 
@@ -229,7 +237,7 @@ def test_exec_prints_the_result_and_exits_with_the_commands_code(monkeypatch: py
 
 
 def test_exec_without_a_command_opens_a_shell(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(lib, "shell", lambda id, user, workdir: 3)
+    monkeypatch.setattr(lib, "shell", lambda id, user, workdir, config=None: 3)
 
     result = runner.invoke(app, ["exec", "--id", "dtu-demo-0000"])
 
@@ -254,7 +262,9 @@ def _universe(id: str) -> Universe:
 
 
 def test_list_prints_a_json_array_of_universes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(lib, "list_universes", lambda: [_universe("dtu-demo-0000"), _universe("dtu-demo-1111")])
+    monkeypatch.setattr(
+        lib, "list_universes", lambda config=None: [_universe("dtu-demo-0000"), _universe("dtu-demo-1111")]
+    )
 
     result = runner.invoke(app, ["list"])
 
@@ -263,7 +273,7 @@ def test_list_prints_a_json_array_of_universes(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_list_of_nothing_is_an_empty_array(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(lib, "list_universes", list)
+    monkeypatch.setattr(lib, "list_universes", lambda config=None: [])
 
     result = runner.invoke(app, ["list"])
 
@@ -272,7 +282,7 @@ def test_list_of_nothing_is_an_empty_array(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_status_prints_the_universe(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(lib, "status", _universe)
+    monkeypatch.setattr(lib, "status", lambda id, config=None: _universe(id))
 
     result = runner.invoke(app, ["status", "--id", "dtu-demo-0000"])
 
@@ -284,11 +294,11 @@ def test_status_prints_the_universe(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_file_push_and_pull_pass_their_arguments_through(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, object] = {}
 
-    def fake_push(id: str, source: Path, destination: str) -> Transfer:
+    def fake_push(id: str, source: Path, destination: str, config: BackendConfig | None = None) -> Transfer:
         seen.update(push=(id, source, destination))
         return Transfer(source=str(source), destination=destination, files=1)
 
-    def fake_pull(id: str, source: str, destination: Path) -> Transfer:
+    def fake_pull(id: str, source: str, destination: Path, config: BackendConfig | None = None) -> Transfer:
         seen.update(pull=(id, source, destination))
         return Transfer(source=source, destination=str(destination), files=1)
 
@@ -307,7 +317,7 @@ def test_destroy_prints_what_was_removed(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(
         lib,
         "destroy",
-        lambda id: Destroyed(
+        lambda id, config=None: Destroyed(
             id=id,
             removed=[f"{id}-app-1"],
             outcome="removed",

@@ -165,6 +165,18 @@ Checks run in this order and every problem is reported, not only the first:
 
 Raises `profile-not-found` and `docker-unavailable`.
 
+## Existing environment endpoints
+
+Per-id calls and `list_universes` require a pinned or explicitly supplied Docker endpoint. Older records without one now raise
+`docker-endpoint-required` before accessing Docker, even if the current context or `DOCKER_HOST` is set.
+Identify the original endpoint and pass `config=BackendConfig(docker_host="unix:///path/to/docker.sock")` for
+that call. This explicit selection does not change the record or infer its origin. New records keep their
+pinned endpoint; an explicit mismatch raises `docker-endpoint-mismatch`.
+
+`list_universes` can raise on a legacy record instead of reporting it against an unverified current context.
+Use `recorded_ids` without Docker, then inspect each id with its original endpoint. The dashboard and MCP
+surfaces cannot adopt legacy records; use the library or CLI for this recovery.
+
 ## Universe
 
 A universe is one Compose project. Its `id` is the project's name, `dtu-<profile name>-<4 hex>`, so `docker compose -p <id> logs` reaches the same stack by hand and `list` can tell two launches of one profile apart.

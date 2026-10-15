@@ -44,6 +44,14 @@ def compose_client(
 
 def record_host(record: UniverseRecord) -> str | None:
     requested = CURRENT.get().docker_host
+    if not record.docker_host and not requested:
+        raise DigitalTwinUniverseError(
+            "docker-endpoint-required",
+            f"Legacy universe {record.id} has no recorded Docker endpoint.",
+            "Identify its original endpoint, then pass BackendConfig(docker_host=...) in the library or "
+            "--docker-host URI on the command. The endpoint is used only for this call; no origin is guessed or saved.",
+            universe_id=record.id,
+        )
     if requested and record.docker_host and requested != record.docker_host:
         raise DigitalTwinUniverseError(
             "docker-endpoint-mismatch",

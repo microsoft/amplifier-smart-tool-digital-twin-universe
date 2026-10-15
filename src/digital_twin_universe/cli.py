@@ -21,6 +21,7 @@ from digital_twin_universe.schemas import (
     DEFAULT_INTELLIGENCE_MODELS,
     DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     AgentProvider,
+    BackendConfig,
     DigitalTwinUniverseError,
     ReasoningEffort,
 )
@@ -31,6 +32,11 @@ AGENT_PROVIDER_HELP = (
     "Codex sign-in), or claude (Claude Agent SDK). The first installed, in that order, when omitted."
 )
 REASONING_EFFORT_NOTE = "Applies to the copilot, codex, and claude agent providers."
+DOCKER_HOST_HELP = "The original Docker endpoint; required for legacy records without a pinned endpoint."
+
+
+def _backend_config(docker_host: str | None) -> BackendConfig | None:
+    return BackendConfig(docker_host=docker_host) if docker_host is not None else None
 
 
 def _model_help(defaults: dict[AgentProvider, str]) -> str:
@@ -286,22 +292,25 @@ def launch(
 
 
 @app.command("list")
-def list_() -> None:
+def list_(docker_host: Annotated[str | None, typer.Option(help=DOCKER_HOST_HELP)] = None) -> None:
     """List every universe launched from this machine, oldest first, measured now. Deterministic.
 
     Prints a JSON array of universes; an empty machine prints `[]`.
     """
-    universes = lib.list_universes()
+    universes = lib.list_universes(config=_backend_config(docker_host))
     typer.echo(json.dumps([universe.model_dump(mode="json") for universe in universes], indent=2))
 
 
 @app.command()
-def status(id: Annotated[str, typer.Option(help="The universe id `launch` printed.")]) -> None:
+def status(
+    id: Annotated[str, typer.Option(help="The universe id `launch` printed.")],
+    docker_host: Annotated[str | None, typer.Option(help=DOCKER_HOST_HELP)] = None,
+) -> None:
     """Measure one universe now: its state, services, and the URLs the host can open. Deterministic.
 
     Prints the universe as JSON, the same shape `launch` printed.
     """
-    typer.echo(lib.status(id).model_dump_json(indent=2))
+    typer.echo(lib.status(id, config=_backend_config(docker_host)).model_dump_json(indent=2))
 
 
 @app.command("exec")
@@ -313,6 +322,7 @@ def exec_(
     user: Annotated[str | None, typer.Option(help="Run as this user instead of the twin's own.")] = None,
     workdir: Annotated[str | None, typer.Option(help="Run here instead of the twin's own working directory.")] = None,
     timeout_seconds: Annotated[int, typer.Option(help="How long a command may run; ignored for a shell.")] = 300,
+    docker_host: Annotated[str | None, typer.Option(help=DOCKER_HOST_HELP)] = None,
 ) -> None:
     """Run a command in the twin, or open a shell in it. Deterministic.
 
@@ -320,8 +330,8 @@ def exec_(
     code. Without it, attaches an interactive login shell to this terminal and exits with the shell's exit code.
     """
     if command is None:
-        raise typer.Exit(code=lib.shell(id, user, workdir))
-    result = lib.execute(id, command, user, workdir, timeout_seconds)
+        raise typer.Exit(code=lib.shell(id, user, workdir, config=_backend_config(docker_host)))
+    result = lib.execute(id, command, user, workdir, timeout_seconds, config=_backend_config(docker_host))
     typer.echo(result.model_dump_json(indent=2))
     raise typer.Exit(code=result.exit_code)
 
@@ -333,12 +343,13 @@ def file_push(
     destination: Annotated[
         str, typer.Option(help="A path in the twin; `docker cp` rules decide where the copy lands.")
     ],
+    docker_host: Annotated[str | None, typer.Option(help=DOCKER_HOST_HELP)] = None,
 ) -> None:
     """Copy a file or directory from the host into the twin, owned by the twin's user. Deterministic.
 
     Prints the transfer as JSON: where the copy landed and how many files it holds.
     """
-    typer.echo(lib.push_files(id, source, destination).model_dump_json(indent=2))
+    typer.echo(lib.push_files(id, source, destination, config=_backend_config(docker_host)).model_dump_json(indent=2))
 
 
 @app.command("export-repository-snapshot")
@@ -357,12 +368,13 @@ def file_pull(
     destination: Annotated[
         Path, typer.Option(help="A path on the host; `docker cp` rules decide where the copy lands.")
     ],
+    docker_host: Annotated[str | None, typer.Option(help=DOCKER_HOST_HELP)] = None,
 ) -> None:
     """Copy a file or directory from the twin onto the host. Deterministic.
 
     Prints the transfer as JSON: where the copy landed and how many files it holds.
     """
-    typer.echo(lib.pull_files(id, source, destination).model_dump_json(indent=2))
+    typer.echo(lib.pull_files(id, source, destination, config=_backend_config(docker_host)).model_dump_json(indent=2))
 
 
 @app.command("export-files")
@@ -372,33 +384,42 @@ def export_files(
     destination: Annotated[Path, typer.Option(help="A new archive file on the host; never overwritten.")],
     max_bytes: Annotated[int, typer.Option(min=1, max=17179869184, help="Maximum archive bytes.")] = 268435456,
     timeout_seconds: Annotated[int, typer.Option(min=1, max=3600, help="Export deadline in seconds.")] = 60,
+    docker_host: Annotated[str | None, typer.Option(help=DOCKER_HOST_HELP)] = None,
 ) -> None:
     """Export a bounded archive from a running or stopped twin without extracting it. Deterministic."""
-    typer.echo(lib.export_files(id, source, destination, max_bytes, timeout_seconds).model_dump_json(indent=2))
+    typer.echo(
+        lib.export_files(
+            id, source, destination, max_bytes, timeout_seconds, config=_backend_config(docker_host)
+        ).model_dump_json(indent=2)
+    )
 
 
 @app.command()
 def stop(
     id: Annotated[str, typer.Option(help="The universe id launch printed.")],
     timeout_seconds: Annotated[int, typer.Option(min=1, max=300, help="Shutdown grace period in seconds.")] = 10,
+    docker_host: Annotated[str | None, typer.Option(help=DOCKER_HOST_HELP)] = None,
 ) -> None:
     """Stop container work and retain the environment and its data. Deterministic.
 
     Prints observed stop results as JSON; exits 1 when cessation could not be confirmed.
     """
-    result = lib.stop(id, timeout_seconds=timeout_seconds)
+    result = lib.stop(id, timeout_seconds=timeout_seconds, config=_backend_config(docker_host))
     typer.echo(result.model_dump_json(indent=2))
     if not result.complete:
         raise typer.Exit(1)
 
 
 @app.command()
-def destroy(id: Annotated[str, typer.Option(help="The universe id `launch` printed.")]) -> None:
+def destroy(
+    id: Annotated[str, typer.Option(help="The universe id `launch` printed.")],
+    docker_host: Annotated[str | None, typer.Option(help=DOCKER_HOST_HELP)] = None,
+) -> None:
     """Remove a universe: its containers, networks, volumes, and state. Built images stay. Deterministic.
 
     Prints the cleanup observation as JSON; exits 1 when cleanup is incomplete.
     """
-    result = lib.destroy(id)
+    result = lib.destroy(id, config=_backend_config(docker_host))
     typer.echo(result.model_dump_json(indent=2))
     if not result.complete:
         raise typer.Exit(1)

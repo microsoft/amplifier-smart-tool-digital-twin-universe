@@ -79,6 +79,21 @@ digital-twin-universe launch --profile <name-or-path> [--timeout-seconds 600]
 
 `lib.launch()`, printed as JSON. Compose's progress goes to stderr while it runs, so the JSON on stdout stays clean. Exits 1 with the cause and remedy on any launch failure; the remedy names the `destroy` command that clears whatever started.
 
+## Existing environment endpoints
+
+`list`, `status`, `exec`, `file-push`, `file-pull`, `export-files`, `stop`, and `destroy` accept optional
+`--docker-host URI`. Older records without a saved endpoint require this explicit original endpoint;
+the current Docker context is never adopted automatically. The selection is not persisted. New records
+continue using their pinned endpoint, and a conflicting explicit endpoint is refused.
+
+```bash
+digital-twin-universe status --id <id> --docker-host unix:///path/to/docker.sock
+```
+
+`list` may stop with `docker-endpoint-required` when it encounters a legacy record. For records originating
+on different endpoints, inspect each id separately with the original endpoint rather than treating one
+current context as authoritative for all of them.
+
 ## digital-twin-universe list
 
 ```bash
