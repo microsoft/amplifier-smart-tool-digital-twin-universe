@@ -7,6 +7,7 @@
 # The database and the owning user are prepared before the server starts, so nothing contends with it for SQLite,
 # and the repositories are made by pushing to them, which Gitea's push-to-create turns into a repository.
 set -e
+rm -f /work/repositories-ready
 
 git config --global --add safe.directory '*'
 mkdir -p /data/gitea/conf /work
@@ -33,4 +34,5 @@ for source in /repos/*/; do
     echo "digital-twin-universe: serving /dtu/$name at branch $branch"
 done
 
+touch /work/repositories-ready
 wait

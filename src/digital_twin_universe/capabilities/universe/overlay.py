@@ -163,15 +163,10 @@ def _git_service(assets: Path, profile_path: Path, repositories: Iterable[Reposi
             *(f"{snapshots / name}:/repos/{name}:ro" for name in served),
         ],
         "healthcheck": {
-            # Ready means the repositories are there, not that the server answers: a clone arriving between the
-            # two would find nothing. localhost resolves to IPv6 first here, where nothing is listening.
+            # Gitea serves the first pushed HEAD before all refs and repositories have been published.
             "test": [
-                "CMD",
-                "wget",
-                "-q",
-                "-O",
-                "/dev/null",
-                f"http://127.0.0.1:{GIT_PORT}{SERVED_ROOT}/{next(iter(served))}/info/refs?service=git-upload-pack",
+                "CMD-SHELL",
+                f"test -f /work/repositories-ready && wget -q -O /dev/null http://127.0.0.1:{GIT_PORT}/api/healthz",
             ],
             "interval": "2s",
             "timeout": "5s",
