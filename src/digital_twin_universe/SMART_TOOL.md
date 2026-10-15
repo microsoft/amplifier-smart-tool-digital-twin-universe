@@ -1,7 +1,7 @@
 ---
 smart_tool_format: 1
 name: digital-twin-universe
-version: 0.5.5
+version: 0.6.0
 description: >-
   Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed
 use_cases:
@@ -124,8 +124,11 @@ try `exec` on a machine you have not used the tool on before. `examples/web-site
 opened from the host's browser at the URLs its `x-dtu.urls` names; read it before writing a
 profile for a web app.
 
-Every universe launched from this machine leaves a directory under `~/.digital-twin-universe/universes/<id>/`
-until it is destroyed, and its containers keep running. Destroy what you launch.
+By default each universe has a record under `~/.digital-twin-universe/universes/<id>/`.
+Library callers can set a private state root and pin the Docker endpoint. Keep that ownership record until
+cleanup is confirmed. `stop` keeps container data; export the files you need before `destroy` removes it.
+Retries with the same launch operation id observe its recorded attempt and never start a replacement.
+Legacy records without an endpoint require an explicit `--docker-host`; ambient Docker context is not proof of ownership.
 
 ## Writing a profile
 
@@ -134,7 +137,8 @@ read the project and Docker's own documentation, write the profile under
 `.agents/digital-twin-universe/<name>/`, launch it, run checks in the twin, and destroy it; the tool
 then launches it again, reruns the checks, and keeps the profile only when it passes. The result names
 the profile, the checks as the tool saw them, and one `next` step. It exits 1 on `failed` and leaves the
-draft at `<name>.draft/` for a person to finish. Add `--keep` to leave the verified universe running
+private draft at the returned `<name>.draft-<unique>/` path for a person to finish. Concurrent drafts are separate;
+promotion refuses an existing final profile. Add `--keep` to leave the verified universe running
 and get its id and URLs back. It costs a few minutes and a model call per attempt; for a profile you can
 write from the examples, `validate-profile` and `launch` are enough.
 

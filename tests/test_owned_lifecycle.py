@@ -333,14 +333,15 @@ def test_exec_drains_large_output_with_bounded_retention(monkeypatch: pytest.Mon
 
 
 def test_random_identity_collision_never_adopts_an_existing_universe(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    launch_fixture: tuple[BackendConfig, Path, list[str]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    config = config_at(tmp_path)
+    config, profile, effects = launch_fixture
     value = record(config)
     monkeypatch.setattr(state, "new_id", lambda name, operation_id: value.id)
     with pytest.raises(DigitalTwinUniverseError) as caught:
-        lib.launch("anything", config=config)
+        lib.launch(profile, config=config)
     assert caught.value.code == "operation-conflict"
+    assert effects == []
     with runtime.configured(config):
         assert state.read(value.id).profile_path == value.profile_path
 

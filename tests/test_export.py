@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 import stat
 import sys
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -127,6 +128,19 @@ def test_full_stderr_pipe_cannot_block_export(export_setup: SimpleNamespace) -> 
     )
     result = lib.export_files(setup.record.id, "/workspace", setup.destination, config=setup.config)
     assert result.bytes == 7
+
+
+def test_inherited_pipe_writer_cannot_extend_timeout(export_setup: SimpleNamespace) -> None:
+    setup = export_setup
+    setup.script.write_text(
+        "import subprocess, sys\nsubprocess.Popen([sys.executable, '-c', 'import time; time.sleep(10)'])\n"
+    )
+    started = time.monotonic()
+    with pytest.raises(DigitalTwinUniverseError) as raised:
+        lib.export_files(setup.record.id, "/workspace", setup.destination, timeout_seconds=1, config=setup.config)
+    assert raised.value.code == "export-timeout"
+    assert time.monotonic() - started < 4
+    assert not setup.destination.exists()
 
 
 @pytest.mark.parametrize("source", ["relative", "/workspace/../secret", "/workspace\0secret"])

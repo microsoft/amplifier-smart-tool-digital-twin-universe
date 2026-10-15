@@ -1,7 +1,9 @@
 """Launch apart from Docker: the overlay's image names, when builds go through Bake, and the Bake command itself."""
 
 from collections.abc import Iterator
+import json
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 from typing import Any
 
@@ -214,6 +216,48 @@ def test_bake_rejects_inline_build_secret_before_persistence() -> None:
     }
     with pytest.raises(DigitalTwinUniverseError, match="inline content"):
         launch_module._build_config(config, ["app"])
+
+
+@pytest.mark.needs_docker
+@pytest.mark.live
+def test_bake_does_not_expand_resolved_literals_again(state_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    record = _record()
+    record.state_path.mkdir()
+    client = compose_client(record.id)
+    intended = {"SIMPLE": "$DTU_BAKE_HOST_VALUE", "BRACED": "${DTU_BAKE_HOST_VALUE}", "DOUBLE": "cost$$value"}
+    config = {"services": {"app": {"build": {"context": str(state_root), "args": intended}}}}
+    monkeypatch.setenv("DTU_BAKE_HOST_VALUE", "HOST_VALUE_MUST_NOT_ENTER_BUILD")
+    monkeypatch.setattr(client.compose, "config", lambda return_json: config)
+    monkeypatch.setattr(launch_module, "stream_stdout_and_stderr", lambda command: iter(()))
+    assertions = ";".join(f"assert os.environ[{key!r}]=={value!r}" for key, value in intended.items())
+    (state_root / "Dockerfile").write_text(
+        "FROM docker.io/library/python:3.13-slim@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f\n"
+        + "".join(f"ARG {key}\n" for key in intended)
+        + "RUN "
+        + json.dumps(["python", "-c", "import os;" + assertions])
+        + "\n"
+    )
+
+    launch_module._bake(client, record, ["app"], grant=False)
+    result = subprocess.run(
+        [
+            "docker",
+            "buildx",
+            "bake",
+            f"--allow=fs.read={state_root}",
+            "--file",
+            str(record.state_path / launch_module.BAKE_FILE),
+            "--set",
+            "app.output=type=cacheonly",
+            "--progress=plain",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "HOST_VALUE_MUST_NOT_ENTER_BUILD" not in result.stdout
 
 
 def test_a_failed_bake_is_a_failed_build() -> None:

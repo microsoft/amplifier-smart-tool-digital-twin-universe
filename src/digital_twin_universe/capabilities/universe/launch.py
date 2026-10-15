@@ -35,7 +35,14 @@ BAKE_ALLOW_VERSION = (0, 17)
 
 def launch(profile: str | Path, timeout_seconds: int = 600, operation_id: str | None = None) -> Universe:
     """Allocate one owned launch. A repeated operation observes its attempt and never repeats effects."""
-    id = state.new_id("launch", operation_id)
+    validation = validate_module.validate(profile) if operation_id is None else None
+    if validation is not None:
+        if validation.unreadable is not None:
+            raise validation.unreadable
+        if validation.profile is None:
+            raise _profile_invalid(validation.report)
+    name = validation.profile.name if validation is not None and validation.profile is not None else "launch"
+    id = state.new_id(name, operation_id)
     with state.lifecycle_lock(id):
         existing = state.root() / id / state.RECORD_FILE
         if existing.is_file():
@@ -69,7 +76,7 @@ def launch(profile: str | Path, timeout_seconds: int = 600, operation_id: str | 
                 id,
                 operation_id,
             )
-        validation = validate_module.validate(profile)
+        validation = validation or validate_module.validate(profile)
         if validation.unreadable is not None:
             raise validation.unreadable
         if validation.profile is None:
@@ -237,7 +244,7 @@ def _bake(client: DockerClient, record: UniverseRecord, services: list[str], gra
     with NamedTemporaryFile(mode="w", encoding="utf-8", dir=record.state_path, delete=False) as temporary:
         pending = Path(temporary.name)
         try:
-            temporary.write(yaml.safe_dump(config, sort_keys=False))
+            temporary.write(yaml.safe_dump(_literal_compose(config), sort_keys=False))
             temporary.close()
             pending.replace(definition)
         finally:
