@@ -50,8 +50,9 @@ created.outcome, created.path, created.checks, created.universe_id, created.urls
 The profile is written to `.agents/digital-twin-universe/<name>/` under the git root that
 holds `--project`, or under `--project` itself when it is not in a repository. Without
 `--project` the same rule applies to the working directory. While the run is in progress the
-files live in `<name>.draft/` beside it; that directory is emptied at the start of every run
-and renamed to `<name>/` only when the profile is kept.
+files live in a unique private `<name>.draft-<suffix>/` beside it. Another call never empties or reuses that
+draft. It is renamed to `<name>/` only when the profile is kept and a locked fingerprint check confirms the
+destination has not changed since this call began. A conflict preserves the draft for review.
 
 Docker's documentation is cached under `~/.digital-twin-universe/reference/` and refreshed
 when it is more than a week old. Fetching it is best effort: without git or network the run
@@ -74,7 +75,8 @@ goes on and the result's `notes` say what was missing.
 - `--keep`: leave the tool's verified universe running and report its id and URLs. Refused
   together with `--no-verify`, which launches nothing to keep.
 - `--overwrite`: replace an existing profile of the same name. Without it, an existing
-  `<name>/` fails the run before any model call.
+  `<name>/` fails the run before any model call. This does not override another caller's later edits;
+  a changed destination raises `profile-changed`.
 - `--max-attempts N`: how many submissions the tool considers, at least 1. Defaults to 3. A
   submission that fails validation or the tool's verification is sent back with the findings.
   One that is unusable (a missing file, the wrong `name:`, or no evidence the agent launched it
@@ -105,7 +107,7 @@ goes on and the result's `notes` say what was missing.
 - `outcome`: `created` (verified and kept), `validated` (kept under `--no-verify`), or
   `failed` (left as a draft).
 - `name` and `path`: the profile name and where it is, `<name>/` when kept and
-  `<name>.draft/` when failed.
+  its unique `<name>.draft-<suffix>/` when failed.
 - `summary`: what the universe is and how the software gets into it, in the agent's words.
 - `files`: what the agent wrote, relative to `path`.
 - `environment`: host variables the profile reads; set them before `launch`.
@@ -126,7 +128,7 @@ goes on and the result's `notes` say what was missing.
 ## Failures
 
 Exits 0 on `created` or `validated`. Exits 1 on `failed`, with the draft at
-`<name>.draft/` for a person to finish from `next` and `notes`: every submission failed
+the result's private draft path for a person to finish from `next` and `notes`: every submission failed
 verification, or the profile needs a host variable that is not set (`next` names it). Exits 2
 on `--keep` with `--no-verify` and on any other bad invocation.
 
@@ -137,6 +139,7 @@ Anything else prints `message` and `remedy` to stderr and exits 1. The library r
 - `docker-unavailable`: Docker is not usable; the remedy is the missing prerequisite's.
 - `name-invalid`: the name, given or derived, is not a profile name.
 - `profile-exists`: `<name>/` exists and `--overwrite` was not passed.
+- `profile-changed`: the destination changed during authoring; the independent draft remains for review.
 - `keep-needs-verify`: library only, `keep=True` with `verify=False`.
 - `agent-provider-not-installed` or `no-agent-provider`: the remedy is the install command.
 - `gh-missing` or `gh-not-signed-in`: `copilot` needs `gh` signed in with Copilot access.
@@ -150,5 +153,7 @@ Anything else prints `message` and `remedy` to stderr and exits 1. The library r
 - `create-timeout`: the deadline passed. The tool's universe is destroyed, the message
   carries the report so far, and the draft stays.
 
-The tool never destroys a universe the agent launched and left up; `notes` and `next` name
-it. Run `digital-twin-universe list` after any failure to see what is still running.
+The tool destroys only the exact universe named by its own launch result or launch error, never a global
+before/after inventory difference. It does not destroy a universe the agent launched and left up; `notes` and
+`next` name it. Run `digital-twin-universe list` after any failure to inspect what is still running, and remove
+only work you own. Incomplete cleanup preserves its id and prevents promotion or another verification launch.

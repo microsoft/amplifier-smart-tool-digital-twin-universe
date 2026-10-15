@@ -1,7 +1,7 @@
 """Status and list: what the tool knows about a universe, measured against Docker now."""
 
 from digital_twin_universe.capabilities.universe import state
-from digital_twin_universe.capabilities.universe.compose import compose_containers, measure
+from digital_twin_universe.capabilities.universe.compose import measure
 from digital_twin_universe.schemas import Universe
 
 
@@ -15,5 +15,4 @@ def list_universes() -> list[Universe]:
     records = state.read_all()
     if not records:
         return []
-    containers = compose_containers()
-    return [measure(record, containers.get(record.id, [])) for record in records]
+    return [measure(record) for record in records]

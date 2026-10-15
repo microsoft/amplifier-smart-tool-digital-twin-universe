@@ -45,11 +45,27 @@ The rules are `docker cp`'s:
 - A trailing `/.` on `--source` is dropped, so it does not mean "the contents". To push only a
   directory's contents, pass a `--destination` that does not exist yet.
 
-The whole copy, file or tree, is then owned by the uid and gid the twin runs as by default.
-When that user is root, the copy stays owned by root, as `docker cp` leaves it. Pushing into an
-existing directory merges with what is there and overwrites files of the same name.
+The copy is owned by the numeric uid and gid the twin runs as by default. A private upload
+archive supplies that ownership to Docker, including when the twin drops all capabilities.
+No host permissions are changed and no `chown` runs inside the twin. File modes and symlink
+text are preserved; symlink targets are never read on the host. Pushing into an existing
+directory merges with what is there and overwrites files of the same name.
+
+Uploads support Linux, WSL, and macOS no-follow file reads. Native Windows uploads fail with
+`transfer-unsupported`; use WSL or a supported host. This restriction applies to uploads,
+not every library capability.
+
+Preparation and upload share a 120-second deadline. Inputs are limited to 100,000 entries,
+128 directory levels, 128 MiB per file, 1 GiB total file content, and a 2 GiB archive. Docker
+diagnostics are limited to 16 MiB per stream. Use smaller batches for larger inputs. A detected
+source change fails before upload; pause the writer and retry. A Docker failure can leave a
+partial copy in the twin, so inspect that destination before retrying.
 
 ## Arguments
+
+- `--docker-host URI`: the original Docker endpoint. Required for legacy records without a pinned endpoint.
+  Library callers pass `config=BackendConfig(docker_host=...)`. This selects the endpoint for this call only;
+  the record is not adopted or changed. An explicit endpoint that differs from a pinned record is refused.
 
 - `--id ID`: the universe id `launch` printed. Required.
 - `--source PATH`: a file or directory on the host, relative to the working directory or
@@ -63,12 +79,15 @@ existing directory merges with what is there and overwrites files of the same na
 `Transfer` JSON on stdout:
 
 - `source`: the host path, as given.
-- `destination`: where the copy landed in the twin, `<destination>/<source name>` when the
-  destination was an existing directory, else the destination as given.
-- `files`: how many files were copied, counted on the host; a file counts one, a directory
-  counts the files anywhere under it.
+- `destination`: the absolute path used in the twin, resolving a destination symlink and adding
+  `<source name>` when the destination was an existing directory.
+- `files`: how many regular files and symlinks were copied. Each counts one; directories do not.
 
 ## Failures
+
+`docker-endpoint-required` means a legacy record has no saved origin: identify the original endpoint and pass
+`--docker-host`. Ambient Docker context and environment variables are not enough. `docker-endpoint-mismatch`
+means an explicit endpoint differs from the record's pinned origin.
 
 A failure prints `message` and `remedy` to stderr and exits 1. Exits 2 on a bad invocation,
 such as a missing option.
@@ -80,6 +99,12 @@ The library raises `DigitalTwinUniverseError` with `code`:
 - `twin-not-running`: the twin's container is absent, exited, or otherwise not running.
 - `source-not-found`: `--source` does not exist on the host.
 - `transfer-failed`: `docker cp` refused, most often because the destination's parent does not
-  exist or a directory would land on an existing file. The message carries Docker's reason.
+  exist or a directory would land on an existing file.
+- `transfer-unsupported`: the host lacks the no-follow reads required for secure uploads.
+- `transfer-limit` or `transfer-timeout`: a preparation, archive, diagnostic, or time limit was reached.
+- `transfer-source-changed`: a selected path changed or could not be read safely during preparation.
+- `transfer-file-unsupported`: a selected entry is a device, socket, or other unsupported file type.
+- `transfer-owner-unknown`: the twin's numeric user and group could not be read.
+- `transfer-path-invalid`: the destination was empty, invalid, or an unresolvable symlink.
 - `docker-unavailable`: Docker is missing or its daemon is down; run `digital-twin-universe
   check`.

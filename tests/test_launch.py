@@ -1,7 +1,10 @@
 """Launch apart from Docker: the overlay's image names, when builds go through Bake, and the Bake command itself."""
 
 from collections.abc import Iterator
+import json
 from pathlib import Path
+import subprocess
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -14,7 +17,7 @@ from digital_twin_universe.capabilities.universe import validate as validate_mod
 from digital_twin_universe.capabilities.universe.compose import compose_client
 from digital_twin_universe.capabilities.universe.profile import Profile, Rewrite, XDtu
 from digital_twin_universe.capabilities.universe.state import UniverseRecord
-from digital_twin_universe.schemas import ProfileReport, Universe
+from digital_twin_universe.schemas import DigitalTwinUniverseError, ProfileReport, Universe
 
 PROFILE_PATH = Path("/profiles/demo/compose.yaml")
 REWRITE = Rewrite(match="api.example.com", target="http://mock:8080")
@@ -160,8 +163,101 @@ def test_bake_grants_the_host_network_and_reads_only_local_contexts(
         "--file",
         str(definition),
     ]
-    assert yaml.safe_load(definition.read_text()) == config
+    assert yaml.safe_load(definition.read_text()) == {
+        "name": record.id,
+        "services": {name: config["services"][name] for name in ("app", "remote")},
+    }
     assert "load local bake definitions" in capsys.readouterr().err
+
+
+def test_bake_excludes_runtime_and_unrelated_secrets_and_replaces_public_file_privately(
+    state_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    record = _record()
+    record.state_path.mkdir()
+    definition = record.state_path / launch_module.BAKE_FILE
+    definition.write_text("previous content")
+    definition.chmod(0o644)
+    client = compose_client(record.id)
+    sentinel = "RUNTIME_SECRET_MUST_NOT_BE_SAVED"
+    config = {
+        "name": record.id,
+        "services": {
+            "app": {
+                "build": {"context": "/fixture", "args": {"INTENDED": "build-value"}, "secrets": ["build-token"]},
+                "image": "fixture:built",
+                "platform": "linux/amd64",
+                "environment": {"TOKEN": sentinel},
+                "labels": {"private": sentinel},
+                "command": sentinel,
+            },
+            "unrelated": {"environment": {"TOKEN": sentinel}, "build": {"args": {"TOKEN": sentinel}}},
+        },
+        "secrets": {"build-token": {"environment": "BUILD_TOKEN"}, "runtime": {"content": sentinel}},
+        "x-private": sentinel,
+    }
+    monkeypatch.setattr(client.compose, "config", lambda return_json: config)
+    monkeypatch.setattr(launch_module, "stream_stdout_and_stderr", lambda command: iter(()))
+
+    launch_module._bake(client, record, ["app"], grant=True)
+
+    assert sentinel not in definition.read_text()
+    assert definition.stat().st_mode & 0o777 == 0o600
+    assert yaml.safe_load(definition.read_text())["secrets"] == {"build-token": {"environment": "BUILD_TOKEN"}}
+    assert "build-value" in definition.read_text()
+    assert config["services"]["app"]["environment"]["TOKEN"] == sentinel
+
+
+def test_bake_rejects_inline_build_secret_before_persistence() -> None:
+    config = {
+        "services": {"app": {"build": {"secrets": ["token"]}}},
+        "secrets": {"token": {"content": "SECRET"}},
+    }
+    with pytest.raises(DigitalTwinUniverseError, match="inline content"):
+        launch_module._build_config(config, ["app"])
+
+
+@pytest.mark.needs_docker
+@pytest.mark.live
+def test_bake_does_not_expand_resolved_literals_again(state_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    record = _record()
+    record.state_path.mkdir()
+    client = compose_client(record.id)
+    intended = {"SIMPLE": "$DTU_BAKE_HOST_VALUE", "BRACED": "${DTU_BAKE_HOST_VALUE}", "DOUBLE": "cost$$value"}
+    config = {"services": {"app": {"build": {"context": str(state_root), "args": intended}}}}
+    monkeypatch.setenv("DTU_BAKE_HOST_VALUE", "HOST_VALUE_MUST_NOT_ENTER_BUILD")
+    monkeypatch.setattr(client.compose, "config", lambda return_json: config)
+    monkeypatch.setattr(launch_module, "stream_stdout_and_stderr", lambda command: iter(()))
+    assertions = ";".join(f"assert os.environ[{key!r}]=={value!r}" for key, value in intended.items())
+    (state_root / "Dockerfile").write_text(
+        "FROM docker.io/library/python:3.13-slim@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f\n"
+        + "".join(f"ARG {key}\n" for key in intended)
+        + "RUN "
+        + json.dumps(["python", "-c", "import os;" + assertions])
+        + "\n"
+    )
+
+    launch_module._bake(client, record, ["app"], grant=False)
+    result = subprocess.run(
+        [
+            "docker",
+            "buildx",
+            "bake",
+            f"--allow=fs.read={state_root}",
+            "--file",
+            str(record.state_path / launch_module.BAKE_FILE),
+            "--set",
+            "app.output=type=cacheonly",
+            "--progress=plain",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "HOST_VALUE_MUST_NOT_ENTER_BUILD" not in result.stdout
 
 
 def test_a_failed_bake_is_a_failed_build() -> None:
@@ -212,6 +308,16 @@ def test_only_a_gateway_universe_with_buildx_builds_before_compose(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     profile = _profile(x_dtu)
+    entry = state_root / "profile.yaml"
+    entry.write_text("name: demo\nservices: {}\n")
+    profile = profile._replace(path=entry)
+    monkeypatch.setattr(launch_module.runtime, "docker_host", lambda: "unix:///fixture.sock")
+    monkeypatch.setattr(
+        launch_module,
+        "compose_client",
+        lambda *args, **kwargs: SimpleNamespace(compose=SimpleNamespace(config=lambda **kwargs: profile.config)),
+    )
+    monkeypatch.setattr(validate_module, "_validated", lambda path, config: validate_module.Validation(report, profile))
     report = ProfileReport(
         path=PROFILE_PATH, name="demo", twin_machine="app", services=profile.services, ok=True, errors=[], warnings=[]
     )

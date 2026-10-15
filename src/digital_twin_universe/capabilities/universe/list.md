@@ -25,6 +25,10 @@ the record.
 
 ## Arguments
 
+- `--docker-host URI`: the original Docker endpoint. Required for legacy records without a pinned endpoint.
+  Library callers pass `config=BackendConfig(docker_host=...)`. This selects the endpoint for this call only;
+  the record is not adopted or changed. An explicit endpoint that differs from a pinned record is refused.
+
 None.
 
 ## Result
@@ -36,6 +40,10 @@ A JSON array on stdout, one `Universe` per universe in the shape `launch` prints
 `[]` without asking Docker.
 
 ## Failures
+
+`docker-endpoint-required` means a legacy record has no saved origin: identify the original endpoint and pass
+`--docker-host`. Ambient Docker context and environment variables are not enough. `docker-endpoint-mismatch`
+means an explicit endpoint differs from the record's pinned origin.
 
 When there is at least one universe to measure and Docker is not usable, it prints `message`
 and `remedy` to stderr and exits 1 with `DigitalTwinUniverseError` code `docker-unavailable`;

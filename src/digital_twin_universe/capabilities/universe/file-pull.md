@@ -47,6 +47,10 @@ directory merges with what is there and overwrites files of the same name.
 
 ## Arguments
 
+- `--docker-host URI`: the original Docker endpoint. Required for legacy records without a pinned endpoint.
+  Library callers pass `config=BackendConfig(docker_host=...)`. This selects the endpoint for this call only;
+  the record is not adopted or changed. An explicit endpoint that differs from a pinned record is refused.
+
 - `--id ID`: the universe id `launch` printed. Required.
 - `--source PATH`: a file or directory in the twin, read with the rules above. Required.
 - `--destination PATH`: a path on the host, relative to the working directory or absolute, read
@@ -65,6 +69,10 @@ directory merges with what is there and overwrites files of the same name.
   one, a directory counts the files anywhere under it, including any that were there before.
 
 ## Failures
+
+`docker-endpoint-required` means a legacy record has no saved origin: identify the original endpoint and pass
+`--docker-host`. Ambient Docker context and environment variables are not enough. `docker-endpoint-mismatch`
+means an explicit endpoint differs from the record's pinned origin.
 
 A failure prints `message` and `remedy` to stderr and exits 1. Exits 2 on a bad invocation,
 such as a missing option.

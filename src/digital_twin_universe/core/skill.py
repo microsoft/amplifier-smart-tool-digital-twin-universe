@@ -82,6 +82,24 @@ CAPABILITIES = (
         skill="capabilities/universe/file-pull.md",
     ),
     Capability(
+        "export-files",
+        "Export a bounded archive from a running or stopped twin without extracting it.",
+        model_backed=False,
+        skill="capabilities/universe/export.md",
+    ),
+    Capability(
+        "stop",
+        "Stop container work while retaining the environment and its data.",
+        model_backed=False,
+        skill="capabilities/universe/stop.md",
+    ),
+    Capability(
+        "export-repository-snapshot",
+        "Export selected repository or linked worktree bytes to a private tar archive, with source provenance.",
+        model_backed=False,
+        skill="capabilities/universe/export-repository-snapshot.md",
+    ),
+    Capability(
         "destroy",
         "Remove a universe: its containers, networks, volumes, and state. Built images stay.",
         model_backed=False,

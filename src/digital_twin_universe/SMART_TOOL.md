@@ -1,7 +1,7 @@
 ---
 smart_tool_format: 1
 name: digital-twin-universe
-version: 0.5.5
+version: 0.6.3
 description: >-
   Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed
 use_cases:
@@ -26,6 +26,13 @@ requires:
       Without it, the model-backed capabilities cannot authenticate through copilot.
     optional: true
     install: https://cli.github.com/
+  - name: git
+    purpose: >-
+      Export approved repository or linked worktree snapshots and publish them through Gitea.
+      Safe export requires no-follow directory reads, currently on Linux, WSL and macOS.
+      Other deterministic capabilities do not need Git.
+    optional: true
+    install: https://git-scm.com/downloads
   - name: github-copilot-subscription
     purpose: >-
       A Copilot subscription on the account signed in to gh powers the model-backed
@@ -56,6 +63,10 @@ Stands up an isolated, realistic environment from a profile on Docker Compose so
 
 **The library is the tool.** `digital_twin_universe.lib` holds every capability. The CLI is a thin
 wrapper over it, so anything you can do from the shell you can also do from Python.
+
+Profiles are trusted Compose inputs, not an untrusted-code sandbox. The gateway filters proxy traffic;
+clients can bypass it. Explicit host mounts, privileged services, and builds retain their Compose powers.
+Runtime environment is excluded from saved build definitions, but explicit build arguments are saved inputs.
 
 ## When to reach for it
 
@@ -113,8 +124,11 @@ try `exec` on a machine you have not used the tool on before. `examples/web-site
 opened from the host's browser at the URLs its `x-dtu.urls` names; read it before writing a
 profile for a web app.
 
-Every universe launched from this machine leaves a directory under `~/.digital-twin-universe/universes/<id>/`
-until it is destroyed, and its containers keep running. Destroy what you launch.
+By default each universe has a record under `~/.digital-twin-universe/universes/<id>/`.
+Library callers can set a private state root and pin the Docker endpoint. Keep that ownership record until
+cleanup is confirmed. `stop` keeps container data; export the files you need before `destroy` removes it.
+Retries with the same launch operation id observe its recorded attempt and never start a replacement.
+Legacy records without an endpoint require an explicit `--docker-host`; ambient Docker context is not proof of ownership.
 
 ## Writing a profile
 
@@ -123,7 +137,8 @@ read the project and Docker's own documentation, write the profile under
 `.agents/digital-twin-universe/<name>/`, launch it, run checks in the twin, and destroy it; the tool
 then launches it again, reruns the checks, and keeps the profile only when it passes. The result names
 the profile, the checks as the tool saw them, and one `next` step. It exits 1 on `failed` and leaves the
-draft at `<name>.draft/` for a person to finish. Add `--keep` to leave the verified universe running
+private draft at the returned `<name>.draft-<unique>/` path for a person to finish. Concurrent drafts are separate;
+promotion refuses an existing final profile. Add `--keep` to leave the verified universe running
 and get its id and URLs back. It costs a few minutes and a model call per attempt; for a profile you can
 write from the examples, `validate-profile` and `launch` are enough.
 
@@ -177,7 +192,9 @@ only `ready` and `installed` exit 0, and `installed` means a universe was launch
 new Docker, not just that `check` passes. Follow its single `next` instruction when manual action
 remains. No step prompts on stdin. Partial installation is reported, not rolled back.
 
-Deterministic capabilities need only `uv` and Docker. Model-backed capabilities run through an agent
+Universe operations need Docker. Repository publishing and `export-repository-snapshot` additionally need Git
+and safe no-follow reads (Linux/WSL/macOS); snapshot archive export itself needs no Docker.
+Model-backed capabilities run through an agent
 provider, picked with `--agent-provider`, or the first installed of `copilot`,
 `amplifier-agent`, `codex`, and `claude` when omitted:
 

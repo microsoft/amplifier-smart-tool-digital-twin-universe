@@ -9,6 +9,7 @@ draft the agent has not already launched and checked.
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
+from contextvars import copy_context
 from dataclasses import dataclass, field
 import hashlib
 import math
@@ -18,6 +19,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from typing import NamedTuple
@@ -29,6 +31,7 @@ from digital_twin_universe.capabilities.create_profile import facts as facts_mod
 from digital_twin_universe.capabilities.create_profile import reference as reference_module
 from digital_twin_universe.capabilities.install.facts import SubprocessRunner, remaining
 from digital_twin_universe.capabilities.universe.profile import PROFILE_DIRECTORY
+from digital_twin_universe.capabilities.universe.state import path_lock
 from digital_twin_universe.core.skill import skill_directory
 from digital_twin_universe.intelligence.interface import Intelligence, select_intelligence
 from digital_twin_universe.intelligence.schemas import AgentRequest, HostWorkspace
@@ -60,7 +63,7 @@ CHECK_TIMEOUT = 300
 LOG_TAIL = 20
 NAME_LIMIT = 40
 NAME_STOPWORDS = frozenset({"a", "an", "the", "and", "for", "of", "on", "to", "with", "using"})
-UNIVERSE_ID_PATTERN = re.compile(r"^dtu-[a-z0-9-]+-[0-9a-f]{4}$")
+UNIVERSE_ID_PATTERN = re.compile(r"^dtu-[a-z0-9-]+-[0-9a-f]{4,32}$")
 # The agent launches through its own `bash`, so a universe it destroyed before submitting leaves no record behind.
 # Sampling the state directory while the agent works is how the tool still sees it appear.
 WATCH_INTERVAL = 0.25
@@ -104,7 +107,9 @@ class UniverseWatch:
                 self._sample()
                 stop.wait(WATCH_INTERVAL)
 
-        thread = threading.Thread(target=poll, name="digital-twin-universe-universe-watch", daemon=True)
+        thread = threading.Thread(
+            target=copy_context().run, args=(poll,), name="digital-twin-universe-universe-watch", daemon=True
+        )
         thread.start()
         try:
             yield
@@ -137,6 +142,7 @@ class Run:
     reasoning_effort: ReasoningEffort
     deadline: float
     watch: UniverseWatch
+    target_revision: str | None = None
     session_id: str | None = None
     attempts: int = 0
     tool_ids: set[str] = field(default_factory=set)
@@ -224,14 +230,13 @@ class Run:
     def verify_draft(self, checks: list[Check], hold: bool) -> Verdict:
         """Launch the draft, run the checks, and destroy the universe unless `hold` and every check passed."""
         fresh = [Check(command=c.command, expect_stdout=c.expect_stdout, status="pending", detail=None) for c in checks]
-        before = set(self.universes.recorded())
         _phase("launching ...")
         try:
             universe = self.universes.launch(self.compose, min(LAUNCH_TIMEOUT, math.ceil(remaining(self.deadline))))
         except DigitalTwinUniverseError as error:
             for check in fresh:
                 check.status, check.detail = "skipped", "The launch failed."
-            started = set(self.universes.recorded()) - before
+            started = {error.universe_id} if error.universe_id is not None else set()
             self.tool_ids |= started
             self.notes += [note for note in map(self.destroy_universe, sorted(started)) if note is not None]
             return Verdict(fresh, None, f"launch failed [{error.code}]: {error.message}\nRemedy: {error.remedy}", error)
@@ -353,7 +358,7 @@ def create_profile(
     runner = SubprocessRunner()
     facts = facts_module.project_facts(project, docker, runner, deadline)
     final = facts.root / PROFILE_DIRECTORY / profile_name
-    draft = final.with_name(f"{profile_name}{DRAFT_SUFFIX}")
+    target_revision = _revision(final)
     if final.exists() and not overwrite:
         raise DigitalTwinUniverseError(
             "profile-exists",
@@ -362,8 +367,7 @@ def create_profile(
         )
     agent, model = select_intelligence(intelligence, agent_provider, model, DEFAULT_INTELLIGENCE_MODELS)
     agent.preflight()
-    shutil.rmtree(draft, ignore_errors=True)
-    draft.mkdir(parents=True)
+    draft = _allocate_draft(final)
     reference = reference_module.ensure_reference(runner, deadline)
     run = Run(
         universes=universes,
@@ -381,6 +385,7 @@ def create_profile(
         reasoning_effort=reasoning_effort,
         deadline=deadline,
         watch=UniverseWatch(universes.recorded),
+        target_revision=target_revision,
     )
     try:
         return _attempts(run, final)
@@ -562,10 +567,43 @@ def _finish(run: Run, path: Path) -> CreatedProfile:
     return result
 
 
+def _allocate_draft(final: Path) -> Path:
+    final.parent.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=f"{final.name}{DRAFT_SUFFIX}-", dir=final.parent))
+
+
+def _revision(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    digest = hashlib.sha256()
+    for entry in sorted(path.rglob("*")):
+        digest.update(str(entry.relative_to(path)).encode())
+        if entry.is_symlink():
+            digest.update(str(entry.readlink()).encode())
+        elif entry.is_file():
+            digest.update(entry.read_bytes())
+    return digest.hexdigest()
+
+
 def _promote(run: Run, final: Path) -> Path:
-    if final.exists():
-        shutil.rmtree(final)
-    run.draft.rename(final)
+    with path_lock(final.with_name(f".{final.name}.promotion.lock"), str(final)):
+        if _revision(final) != run.target_revision:
+            raise DigitalTwinUniverseError(
+                "profile-changed",
+                f"Profile {final} changed while this draft was being prepared.",
+                f"The independent draft remains at {run.draft}; review it before replacing the newer profile.",
+            )
+        if final.exists():
+            backup = final.with_name(f"{run.draft.name}.previous")
+            final.rename(backup)
+            try:
+                run.draft.rename(final)
+            except OSError:
+                backup.rename(final)
+                raise
+            shutil.rmtree(backup)
+        else:
+            run.draft.rename(final)
     return final
 
 

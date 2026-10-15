@@ -52,7 +52,7 @@ Error codes:
 - `profile-invalid`: Compose rejected the file; the message is Compose's own. When this or
   `env-missing` appears, it is the only finding, since nothing else could be read.
 - `env-missing`: the file reads a variable with `${NAME:?...}` and it is not set. Export it
-  and validate again; it is read at launch and never written to a file.
+  and validate again. Runtime environment is excluded from saved build definitions; explicit build arguments remain saved inputs.
 - `x-dtu-invalid`: a key in `x-dtu` is unknown or has the wrong type. One finding per problem.
 - `twin-missing`: no service matches the twin rule above.
 - `twin-excluded-by-compose-profile`: the twin exists but a Compose `profiles:` entry gates it,

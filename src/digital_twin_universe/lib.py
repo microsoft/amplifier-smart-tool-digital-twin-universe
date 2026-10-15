@@ -8,27 +8,34 @@ from digital_twin_universe.capabilities.dashboard import server as dashboard_mod
 from digital_twin_universe.capabilities.install import install as install_module
 from digital_twin_universe.capabilities.universe import destroy as destroy_module
 from digital_twin_universe.capabilities.universe import execute as execute_module
+from digital_twin_universe.capabilities.universe import export as export_module
 from digital_twin_universe.capabilities.universe import files as files_module
 from digital_twin_universe.capabilities.universe import launch as launch_module
-from digital_twin_universe.capabilities.universe import state
+from digital_twin_universe.capabilities.universe import repository_snapshot, state
 from digital_twin_universe.capabilities.universe import status as status_module
+from digital_twin_universe.capabilities.universe import stop as stop_module
 from digital_twin_universe.capabilities.universe import validate as validate_module
+from digital_twin_universe.capabilities.universe.runtime import configured
 from digital_twin_universe.core import manifest
 from digital_twin_universe.core import skill as skill_module
 from digital_twin_universe.intelligence.interface import Intelligence
 from digital_twin_universe.schemas import (
     DEFAULT_INTELLIGENCE_REASONING_EFFORT,
     AgentProvider,
+    BackendConfig,
     CreatedProfile,
     Dashboard,
     Destroyed,
     DigitalTwinUniverseError,
     ExecResult,
+    FileArchive,
     HostReport,
     InstallReport,
     Manifest,
     ProfileReport,
     ReasoningEffort,
+    RepositorySnapshot,
+    Stopped,
     Transfer,
     Universe,
 )
@@ -64,9 +71,15 @@ def repository_url() -> str | None:
     return skill_module.repository_url()
 
 
-def check() -> HostReport:
+def check(config: BackendConfig | None = None) -> HostReport:
     """Whether this host can run a universe: the Docker CLI, a reachable daemon, and the Compose plugin."""
-    return check_module.check()
+    with configured(config):
+        return check_module.check()
+
+
+def export_repository_snapshot(source: Path, destination: Path) -> RepositorySnapshot:
+    """Export a stable selected source tree to a new private tar archive, without Docker or a model provider."""
+    return repository_snapshot.export_archive(source, destination)
 
 
 def install(
@@ -163,38 +176,47 @@ def _recorded_ids() -> list[str]:
     return recorded_ids()
 
 
-def recorded_ids() -> list[str]:
+def recorded_ids(config: BackendConfig | None = None) -> list[str]:
     """Ids of every universe with a record on this machine, read without Docker and cheap enough to poll."""
-    if not state.STATE_ROOT.is_dir():
-        return []
-    return sorted(path.name for path in state.STATE_ROOT.iterdir() if (path / state.RECORD_FILE).is_file())
+    with configured(config):
+        return state.recorded_ids()
 
 
 def _relocate(id: str, profile_path: Path) -> None:
     """Point a universe's record at the profile's new location after a rename, so `list` tells the truth."""
-    record = state.read(id)
-    record.profile_path = profile_path
-    state.write(record)
+    with state.lifecycle_lock(id):
+        record = state.read(id)
+        record.profile_path = profile_path
+        state.write(record)
 
 
-def validate_profile(profile: str | Path) -> ProfileReport:
+def validate_profile(profile: str | Path, config: BackendConfig | None = None) -> ProfileReport:
     """Whether a profile can be launched, and what would be unrealistic about it if it were."""
-    return validate_module.validate_profile(profile)
+    with configured(config):
+        return validate_module.validate_profile(profile)
 
 
-def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe:
+def launch(
+    profile: str | Path,
+    timeout_seconds: int = 600,
+    operation_id: str | None = None,
+    config: BackendConfig | None = None,
+) -> Universe:
     """From a profile to a running, ready universe: validated, recorded, brought up, and waited on."""
-    return launch_module.launch(profile, timeout_seconds)
+    with configured(config):
+        return launch_module.launch(profile, timeout_seconds, operation_id)
 
 
-def list_universes() -> list[Universe]:
+def list_universes(config: BackendConfig | None = None) -> list[Universe]:
     """Every universe launched from this machine, oldest first, each measured against Docker now."""
-    return status_module.list_universes()
+    with configured(config):
+        return status_module.list_universes()
 
 
-def status(id: str) -> Universe:
+def status(id: str, config: BackendConfig | None = None) -> Universe:
     """One universe, measured against Docker now."""
-    return status_module.status(id)
+    with configured(config):
+        return status_module.status(id)
 
 
 def execute(
@@ -203,29 +225,36 @@ def execute(
     user: str | None = None,
     workdir: str | None = None,
     timeout_seconds: int = 300,
+    max_output_bytes: int = 1048576,
+    config: BackendConfig | None = None,
 ) -> ExecResult:
     """Run one command in the twin through a login shell. A non-zero exit is a result, not a failure."""
-    return execute_module.execute(id, command, user, workdir, timeout_seconds)
+    with configured(config):
+        return execute_module.execute(id, command, user, workdir, timeout_seconds, max_output_bytes)
 
 
-def shell(id: str, user: str | None = None, workdir: str | None = None) -> int:
+def shell(id: str, user: str | None = None, workdir: str | None = None, config: BackendConfig | None = None) -> int:
     """An interactive shell in the twin, attached to this terminal; returns its exit code."""
-    return execute_module.shell(id, user, workdir)
+    with configured(config):
+        return execute_module.shell(id, user, workdir)
 
 
-def push_files(id: str, source: Path, destination: str) -> Transfer:
+def push_files(id: str, source: Path, destination: str, config: BackendConfig | None = None) -> Transfer:
     """Copy a host file or directory into the twin with `docker cp` semantics, owned by the twin's user."""
-    return files_module.push_files(id, source, destination)
+    with configured(config):
+        return files_module.push_files(id, source, destination)
 
 
-def pull_files(id: str, source: str, destination: Path) -> Transfer:
+def pull_files(id: str, source: str, destination: Path, config: BackendConfig | None = None) -> Transfer:
     """Copy a file or directory out of the twin onto the host with `docker cp` semantics."""
-    return files_module.pull_files(id, source, destination)
+    with configured(config):
+        return files_module.pull_files(id, source, destination)
 
 
-def destroy(id: str) -> Destroyed:
+def destroy(id: str, config: BackendConfig | None = None) -> Destroyed:
     """Take a universe down and observe residue. Forget its state only after verified removal. Images stay."""
-    return destroy_module.destroy(id)
+    with configured(config):
+        return destroy_module.destroy(id)
 
 
 def serve_dashboard(port: int | None = None, host: str = "127.0.0.1") -> Dashboard:
@@ -240,3 +269,28 @@ def serve_dashboard(port: int | None = None, host: str = "127.0.0.1") -> Dashboa
         host: The interface to bind. The default keeps the server off the local network.
     """
     return dashboard_module.serve_dashboard(port, host)
+
+
+def launch_id(operation_id: str, config: BackendConfig | None = None) -> str:
+    """Resolve a caller-owned launch id without Docker or side effects."""
+    with configured(config):
+        return state.new_id("launch", operation_id)
+
+
+def stop(id: str, config: BackendConfig | None = None, timeout_seconds: int = 10) -> Stopped:
+    """Stop container work while retaining the environment and its data; report observed completion."""
+    with configured(config):
+        return stop_module.stop(id, timeout_seconds)
+
+
+def export_files(
+    id: str,
+    source: str,
+    destination: Path,
+    max_bytes: int = 268435456,
+    timeout_seconds: int = 60,
+    config: BackendConfig | None = None,
+) -> FileArchive:
+    """Export a bounded archive from a running or stopped owned container without extracting it."""
+    with configured(config):
+        return export_module.export_files(id, source, destination, max_bytes, timeout_seconds)

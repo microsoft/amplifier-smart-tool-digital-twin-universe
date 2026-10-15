@@ -49,6 +49,10 @@ image's `WORKDIR`, else `/`.
 
 ## Arguments
 
+- `--docker-host URI`: the original Docker endpoint. Required for legacy records without a pinned endpoint.
+  Library callers pass `config=BackendConfig(docker_host=...)`. This selects the endpoint for this call only;
+  the record is not adopted or changed. An explicit endpoint that differs from a pinned record is refused.
+
 - `--id ID`: the universe id `launch` printed, such as `dtu-hello-1a2b`. Required. A container
   or image name that starts with an id is refused with `universe-not-found`, and the remedy
   names the id.
@@ -80,6 +84,10 @@ Without `--command`, nothing is printed; the shell is attached to this terminal 
 exits with the shell's exit code.
 
 ## Failures
+
+`docker-endpoint-required` means a legacy record has no saved origin: identify the original endpoint and pass
+`--docker-host`. Ambient Docker context and environment variables are not enough. `docker-endpoint-mismatch`
+means an explicit endpoint differs from the record's pinned origin.
 
 A failure prints `message` and `remedy` to stderr, prints no JSON, and exits 1. A non-zero exit
 with no JSON on stdout is therefore the tool failing, not the command. Exits 2 on a bad

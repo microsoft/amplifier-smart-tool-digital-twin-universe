@@ -29,11 +29,24 @@ class DigitalTwinUniverseError(Exception):
     and `remedy` says what to do about it.
     """
 
-    def __init__(self, code: str, message: str, remedy: str) -> None:
+    def __init__(
+        self, code: str, message: str, remedy: str, universe_id: str | None = None, operation_id: str | None = None
+    ) -> None:
         super().__init__(f"{message} {remedy}")
         self.code = code
         self.message = message
         self.remedy = remedy
+        self.universe_id = universe_id
+        self.operation_id = operation_id
+
+
+class BackendConfig(BaseModel):
+    """Explicit local backend storage and Docker endpoint, isolated per call rather than process environment."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    state_root: Path | None = None
+    docker_host: str | None = None
 
 
 # region: Manifest
@@ -182,6 +195,7 @@ class ProfileReport(BaseModel):
 # region: Universe
 
 UniverseState = Literal["starting", "running", "degraded", "stopped"]
+LifecyclePhase = Literal["allocated", "launching", "ready", "failed", "stopping", "stopped", "destroying"]
 Health = Literal["starting", "healthy", "unhealthy"]
 
 
@@ -227,6 +241,23 @@ class Universe(BaseModel):
     urls: list[Url]
     state_path: Path
     created_at: datetime
+    operation_id: str | None = None
+    phase: LifecyclePhase = "ready"
+    expected_services: list[str] = Field(default_factory=list)
+
+
+class Stopped(BaseModel):
+    """Observed cessation of container work, preserving containers, volumes, and the management record."""
+
+    id: str
+    outcome: Literal["stopped", "incomplete", "unknown"]
+    running: list[str] | None
+    errors: list[str] = Field(default_factory=list)
+    state_retained: bool = True
+
+    @property
+    def complete(self) -> bool:
+        return self.outcome == "stopped" and self.running == [] and not self.errors and self.state_retained
 
 
 class ExecResult(BaseModel):
@@ -235,6 +266,32 @@ class ExecResult(BaseModel):
     exit_code: int
     stdout: str
     stderr: str
+    stdout_truncated: bool = False
+    stderr_truncated: bool = False
+
+
+class FileArchive(BaseModel):
+    """A bounded, unextracted archive exported from an owned container."""
+
+    id: str
+    source: str
+    destination: Path
+    bytes: int
+    sha256: str
+
+
+class RepositorySnapshot(BaseModel):
+    """An exact selected source archive and the retained Git identities it was built from."""
+
+    path: Path
+    source_head: str
+    source_branch: str
+    snapshot_commit: str
+    snapshot_tree: str
+    files: int
+    shallow_source: bool
+    archive_bytes: int
+    archive_sha256: str
 
 
 class Transfer(BaseModel):

@@ -37,6 +37,11 @@ To use it as a library:
 uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
 ```
 
+Deterministic operations need no model provider; omit extras for a core-only install. Installing the package
+does not install Docker or enable a host application's test backend. An embedding application or operator
+chooses the Docker endpoint, private state location, approved profiles, and access to source. Docker setup
+changes require the separate explicit `install --yes` operation.
+
 To update:
 
 ```bash
@@ -84,7 +89,14 @@ digital-twin-universe exec --id <id>
 digital-twin-universe file-push --id <id> --source ./src --destination /workspace
 digital-twin-universe file-pull --id <id> --source /var/log/app.log --destination ./
 
-# Take it down
+# Export approved source without Docker (Git and no-follow reads on Linux/WSL/macOS)
+digital-twin-universe export-repository-snapshot --source ./project --destination ./retained/source.tar
+
+# Stop work while preserving the environment, then save the paths you need
+digital-twin-universe stop --id <id>
+digital-twin-universe export-files --id <id> --source /workspace --destination ./workspace.tar
+
+# Remove the environment after retaining its required data
 digital-twin-universe destroy --id <id>
 
 # A web page showing every universe on this machine; prints its URL and its MCP server's
@@ -99,6 +111,13 @@ Hosts that support MCP Apps render the dashboard in the chat. A client that conn
 Profiles live under `.agents/digital-twin-universe/<name>/` in a project; the tool also ships ready-to-launch [examples](src/digital_twin_universe/examples). See the [profile reference](docs/03-profile.md).
 
 See the [CLI reference](docs/02-cli.md) for every flag and the [library reference](docs/01-library.md) for the Python surface.
+
+The library supports separate state roots, pinned Docker endpoints, caller-owned launch identities, and
+inspection after interrupted work. Uncertain launches and command results are never automatically replayed.
+Profiles remain trusted Compose configuration, not a security boundary against privileged or untrusted daemon
+operators. Source snapshots, safe uploads, and bounded archive export require Linux/macOS host facilities;
+WSL follows the Linux path. Native Windows and WSL are not live-qualified for this release. Ordinary Docker
+profile support across platforms remains a goal, with unsupported capabilities reported explicitly.
 
 ## Contributing
 

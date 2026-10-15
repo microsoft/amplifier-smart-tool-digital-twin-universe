@@ -6,6 +6,7 @@ import shutil
 from python_on_whales import DockerClient
 from python_on_whales.exceptions import DockerException
 
+from digital_twin_universe.capabilities.universe.runtime import CURRENT
 from digital_twin_universe.schemas import HostReport, Platform, Prerequisite
 
 DOCKER_INSTALL_URL = "https://docs.docker.com/get-started/get-docker/"
@@ -65,7 +66,7 @@ def _probe_cli() -> Prerequisite:
 
 def _probe_daemon() -> Prerequisite:
     try:
-        version = DockerClient().version()
+        version = DockerClient(host=CURRENT.get().docker_host).version()
     except DockerException as error:
         return Prerequisite(
             name="docker-daemon", present=False, detail=_first_line(error.stderr), remedy=_install_remedy()
@@ -83,7 +84,7 @@ def _probe_daemon() -> Prerequisite:
 
 def _probe_compose() -> Prerequisite:
     try:
-        version = DockerClient().compose.version()
+        version = DockerClient(host=CURRENT.get().docker_host).compose.version()
     except DockerException as error:
         return Prerequisite(
             name="docker-compose",

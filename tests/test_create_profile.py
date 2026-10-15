@@ -7,6 +7,7 @@ The fake agent writes real files into the draft the way the real one does, so `v
 from collections.abc import Callable
 from dataclasses import dataclass, field
 import json
+import os
 from pathlib import Path
 import re
 import time
@@ -191,6 +192,7 @@ class Harness:
     universes: FakeUniverses
     draft: Path
     final: Path
+    allocate_draft: Callable[[Path], Path]
 
     def write(self, request: AgentRequest, content: str = HELLO, name: str = NAME, into: Path | None = None) -> None:
         target = into if into is not None else self.draft
@@ -245,7 +247,15 @@ def harness(state_root: Path, make_repository: MakeRepository, monkeypatch: pyte
         ),
     )
     final = project / ".agents" / "digital-twin-universe" / NAME
-    return Harness(project, universes, final.with_name(f"{NAME}.draft"), final)
+
+    def allocate(final: Path) -> Path:
+        path = final.with_name(f"{NAME}.draft")
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    actual_allocator = create_module._allocate_draft
+    monkeypatch.setattr(create_module, "_allocate_draft", allocate)
+    return Harness(project, universes, final.with_name(f"{NAME}.draft"), final, actual_allocator)
 
 
 def test_validate_only_promotes_without_launching(harness: Harness) -> None:
@@ -469,24 +479,50 @@ def test_a_silent_profile_change_during_cleanup_is_detected_and_a_break_is_a_fai
     assert "broken by cleanup" in agent.requests[2].prompt
 
 
-def test_profile_exists_refuses_without_overwrite_and_a_stale_draft_is_cleared(harness: Harness) -> None:
+def test_profile_overwrite_uses_a_private_draft_and_preserves_other_drafts(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
     harness.final.mkdir(parents=True)
     (harness.final / "compose.yaml").write_text("old")
-    harness.draft.mkdir()
-    (harness.draft / "leftover.txt").write_text("stale")
+    stale = harness.draft
+    stale.mkdir()
+    (stale / "leftover.txt").write_bytes(b"stale bytes\x00\n")
+    peer = harness.allocate_draft(harness.final)
+    (peer / "compose.yaml").write_bytes(b"concurrent draft\n")
+    allocated: list[Path] = []
+
+    def allocate(final: Path) -> Path:
+        path = harness.allocate_draft(final)
+        assert path not in (stale, peer)
+        assert path.name.startswith(f"{NAME}.draft-")
+        if os.name == "posix":
+            assert path.stat().st_mode & 0o777 == 0o700
+        allocated.append(path)
+        harness.draft = path
+        return path
+
+    monkeypatch.setattr(create_module, "_allocate_draft", allocate)
     agent = FakeIntelligence([harness.author(universe_id=None)])
 
     with pytest.raises(DigitalTwinUniverseError) as caught:
         harness.create(agent, verify=False)
     assert caught.value.code == "profile-exists"
     assert not agent.requests
-    assert (harness.draft / "leftover.txt").exists()
+    assert not allocated
+    assert (harness.final / "compose.yaml").read_text() == "old"
+    assert (stale / "leftover.txt").read_bytes() == b"stale bytes\x00\n"
+    assert (peer / "compose.yaml").read_bytes() == b"concurrent draft\n"
 
     result = harness.create(agent, verify=False, overwrite=True)
 
     assert result.outcome == "validated"
+    assert result.path == harness.final
+    assert len(allocated) == 1
+    assert not allocated[0].exists()
     assert (harness.final / "compose.yaml").read_text() != "old"
     assert not (harness.final / "leftover.txt").exists()
+    assert (stale / "leftover.txt").read_bytes() == b"stale bytes\x00\n"
+    assert (peer / "compose.yaml").read_bytes() == b"concurrent draft\n"
 
 
 def test_keep_leaves_the_tools_universe_up_and_repoints_its_record(harness: Harness) -> None:
