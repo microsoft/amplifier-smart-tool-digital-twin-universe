@@ -14,14 +14,14 @@ Example uses:
 - "I want to run my web app against a real Postgres and open it in my browser, as if it were deployed."
 - "I want to install my unpublished repositories as if they were already on GitHub, and see whether the install actually works."
 
-It takes the learnings from [amplifier-bundle-digital-twin-universe](https://github.com/microsoft/amplifier-bundle-digital-twin-universe/) and [amplifier-bundle-gitea](https://github.com/microsoft/amplifier-bundle-gitea) and rebuilds them on Docker Compose, so anyone with Docker gets the same experience on Windows, macOS, and Linux. 
+It takes the learnings from [amplifier-bundle-digital-twin-universe](https://github.com/microsoft/amplifier-bundle-digital-twin-universe/) and [amplifier-bundle-gitea](https://github.com/microsoft/amplifier-bundle-gitea) and rebuilds them on Docker Compose, with a common profile format and explicit capability limits across Windows, macOS, and Linux.
 It is a fresh design rather than a port: it shares no profile schema, engine, or state with amplifier-bundle-digital-twin-universe.
 
 ## What a universe is
 
 A universe is one Docker Compose project. Every part of it is a service in the same `compose.yaml`:
 
-- The twin: the container the code under test runs in, provisioned from the profile so that it looks like a real user's machine: packages installed, config files in the correct places, and API keys passed through from the host's environment at launch rather than written into the rendered files.
+- The twin: the container the code under test runs in, provisioned from the profile so that it looks like a real user's machine: packages installed, config files in the correct places, and API keys supplied by the approved profile. Resolved launch settings use a private temporary file; normal cleanup removes it, but process death can leave credentials there. Saved build definitions exclude runtime environment; explicit build arguments remain saved inputs.
 - Dependencies the profile declares, such as a database or a cache.
 - Gitea, when the profile publishes local repositories, so they can be cloned and installed over `https://` as if they were on GitHub.
 - A gateway, when the profile rewrites URLs or filters requests made through the configured HTTP proxy.
@@ -40,9 +40,10 @@ The universe is reachable from the host in two ways.
 Ports the profile exposes are forwarded to localhost, so a web app in the twin opens in the host's browser at `http://localhost:<port>` and `launch` reports those URLs. 
 `exec` runs a command or an interactive shell inside the twin as the provisioned user, so a CLI like OpenAI Codex can be driven exactly as a person would, with its config and keys already in place.
 
-On Linux and macOS the twin is a Linux container. 
-On Windows it is a Linux container by default, and a profile can opt into Windows containers when the software under test needs Windows itself, such as a `.exe` installer or PowerShell-first tooling. 
-Both modes render the same kind of `compose.yaml` and answer to the same commands.
+On Linux and macOS the twin is a Linux container. Ordinary Docker profile support across platforms remains a
+goal, with Linux containers the default on Windows hosts. Source snapshots, bounded archive export, and safe
+file uploads currently require Linux or macOS host facilities; WSL uses the Linux path. Native Windows and WSL
+have not been live-qualified for this release, and Windows-container support is not established by these changes.
 
 ## What this adds to Docker Compose
 
@@ -78,10 +79,10 @@ Constraints this sets:
 ## Goals
 
 - Docker runs universes; publishing repositories additionally needs local Git and safe no-follow file reads, currently on Linux, WSL, and macOS. `check` reports Docker availability. `install` reads official docs to plan Docker setup and only applies with explicit consent (`--yes`). Source archive export itself needs no Docker.
-- One interface on every OS. Every command takes the same flags and returns the same JSON on Windows, macOS, and Linux. Platform differences are absorbed inside the tool, never surfaced to the caller.
+- One interface on every OS where a capability is supported. Flags and JSON retain the same meaning; capabilities that require unavailable host safety primitives return a named unsupported error before their effects.
 - From zero to a running universe in one command after Docker is present: `launch --profile <profile-name>`, resolving under `.agents/digital-twin-universe/`, or `launch --profile path/to/compose.yaml`.
 - The profile is a Compose file. The twin, its dependencies, ports, environment, and healthchecks are ordinary Compose services, so nothing is lost in translation and anyone who knows Compose can write one. What Compose cannot say, which service is the twin, which local repositories to publish, and what the gateway rewrites or allows, lives in an `x-dtu` block that plain `docker compose` ignores. The tool renders an overlay file beside it, with Gitea, the gateway, and the trust plumbing, and runs both together.
-- Windows containers are an option, not a requirement. A profile on Windows can ask for a Windows twin; everything else about the tool stays the same.
+- Windows containers remain a target for software that needs Windows itself, not a requirement or a claim of current qualification for the Linux-oriented twin operations.
 - A dashboard, in the style of [mybench-smart-tool](https://github.com/DavidKoleczek/mybench-smart-tool), shows every universe on the machine, what it exposes, and its logs, and lets a person open, shell into, or destroy one without remembering ids.
 - The same command set as the Digital Twin Universe smart tool, so agents and skills written against it need only relearn the profile. Deterministic commands run with no model provider configured:
 

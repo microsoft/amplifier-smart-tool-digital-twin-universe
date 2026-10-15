@@ -16,6 +16,44 @@ The trade is that the Docker CLI must be on `PATH`, which Docker Desktop and Doc
 File transfers use `docker cp` rather than `docker compose cp`, which fails on whole directories.
 `install` is the exception: it runs documented host-shell commands, not Docker.
 
+## Backend configuration and ownership
+
+Deterministic host and universe calls accept optional `config: BackendConfig | None`. Import it from
+`digital_twin_universe.lib` or `digital_twin_universe.schemas`:
+
+```python
+from pathlib import Path
+
+from digital_twin_universe.lib import BackendConfig, launch, launch_id
+
+config = BackendConfig(
+    state_root=Path("/path/to/private/dtu-state"),
+    docker_host="unix:///path/to/docker.sock",
+)
+request_id = "caller-persisted-request-id"
+expected_id = launch_id(request_id, config=config)
+universe = launch("./profile/compose.yaml", operation_id=request_id, config=config)
+assert universe.id == expected_id
+```
+
+Configuration is scoped to the call without changing process environment or module globals. The default state
+root is `~/.digital-twin-universe/universes`. New launches resolve and retain one Docker endpoint; changing the
+ambient context later does not retarget them. Separate state roots produce different operation-derived project
+ids. Lifecycle locks serialize launch, stop, upload, export, and destroy for one id across cooperating processes;
+contention returns `operation-busy`. They do not serialize application commands, reserve host ports, or isolate
+host mounts and explicitly shared resources in a trusted profile.
+
+An embedding application chooses whether to enable this optional backend, approves profiles and source access,
+owns its state root and durable request ids, and reports uncertain outcomes without replaying work. Installing
+the Python package does not install Docker. `install(apply=True)` is a separate explicit host operation.
+`create_profile`, `install`, dashboard, and MCP do not expose per-call backend configuration. This API is not a
+remote orchestration service or a security boundary against privileged or untrusted Docker daemon operators.
+
+For 0.6.0 compatibility, treat universe ids and returned draft paths as opaque, handle the explicit legacy
+endpoint requirement below, and check `complete` before reporting stop or cleanup success. Native Windows
+source snapshot, bounded export, and safe upload calls now return named unsupported errors; other operations
+are not disabled by those capability limits. Native Windows and WSL have not been live-qualified for this release.
+
 ## Failures
 
 Every failure the library can name is one exception:
@@ -25,11 +63,19 @@ class DigitalTwinUniverseError(Exception):
     code: str  # stable slug to branch on, such as "port-in-use"
     message: str  # what went wrong, with the specifics: the service, the port, the variable
     remedy: str  # what to do about it
+    universe_id: str | None  # owned attempt when allocation has happened
+    operation_id: str | None  # caller's launch identity, when supplied
 ```
 
 `str(error)` is the message followed by the remedy, which is what the CLI prints. Each capability lists the codes it raises. Anything else that escapes is a bug.
 
 A result that carries a verdict (`HostReport.ok`, `ProfileReport.ok`, `InstallReport.outcome`) is never raised as an error when the verdict is negative. The verdict is the answer.
+
+After a failed or interrupted launch, retain its identity and inspect `status`; use `recorded_ids` if Docker
+cannot be reached. Missing observations are not proof of removal. `Stopped.complete` and `Destroyed.complete`
+require observed completion; an incomplete result retains recovery state. A timeout or lost response does not
+authorize another launch or command. Per-id calls can also raise `operation-busy`, `state-unreadable`,
+`state-identity-mismatch`, `docker-endpoint-required`, or `docker-endpoint-mismatch`.
 
 ## Check
 
@@ -37,7 +83,7 @@ Whether this host can run a universe: the Docker CLI on `PATH`, a daemon answeri
 Deterministic; needs no model provider.
 
 ```python
-def check() -> HostReport
+def check(config: BackendConfig | None = None) -> HostReport
 ```
 
 `HostReport.prerequisites` is in probe order and stops at the first one missing; each missing one carries a `remedy`, which names `digital-twin-universe install`.
@@ -97,14 +143,19 @@ def create_profile(
 ) -> CreatedProfile
 ```
 
-The agent has tools and the tool has the verdict. The agent works in the project root (the git root above `project`, or `project` itself, or the working directory without one) with tools to read, search, and write files and run commands, reading the repository and a local clone of Docker's documentation, and writing only into `<name>.draft/` beside where the profile will land. It must validate, launch, run every check in the twin, and destroy on its own before submitting, and the submission is accepted only when it carries the id of a universe the tool saw appear during the run and a passed result for every check; anything less is sent back once as a correction, then `profile-rejected`. The tool then validates, launches, reruns the same checks through `execute`, and destroys. Only a draft that passes for the tool is renamed to `<name>/`.
+The agent has tools and the tool has the verdict. The agent works in the project root (the git root above `project`, or `project` itself, or the working directory without one) with tools to read, search, and write files and run commands, reading the repository and a local clone of Docker's documentation, and writing only into a unique private `<name>.draft-<suffix>/` beside where the profile will land. It must validate, launch, run every check in the twin, and destroy on its own before submitting, and the submission is accepted only when it carries the id of a universe the tool saw appear during the run and a passed result for every check; anything less is sent back once as a correction, then `profile-rejected`. The tool then validates, launches, reruns the same checks through `execute`, and destroys. Only a draft that passes for the tool is renamed to `<name>/`.
+
+Concurrent calls never empty or reuse each other's drafts. Promotion takes a per-profile lock and checks the
+destination against its initial fingerprint, including with `overwrite=True`. A changed destination raises
+`profile-changed` and preserves the independent draft. Replacement temporarily retains the previous profile
+and restores it if the draft rename fails; inspect a retained `.previous` directory after process interruption.
 
 After the tool's verdict, one more turn in the same session asks the agent to clean up: destroy anything it launched that is still listed, remove scratch it made outside the draft, and take out of the profile anything that was there only for iteration. When that edits the profile, or the draft's files differ afterwards whatever the agent said, the tool validates and launches once more before promoting.
 
 ```
 created      the agent launched and checked, the tool launched and checked, cleanup ran; <name>/ exists
 validated    verify=False; validate-profile has no errors; <name>/ exists
-failed       attempts exhausted, or a variable the profile rightly demands is unset; <name>.draft/ holds the last attempt
+failed       attempts exhausted, or a required variable is unset; the result's private draft path holds the last attempt
 ```
 
 `CreatedProfile.checks` is the tool's own run, not the agent's. `env-missing` is never sent back to the agent as a defect: the profile is right to demand the variable, so the run ends `failed` with `next` saying what to export. `keep=True` leaves the tool's verified universe running with its `universe_id` and `urls` in the result and its record pointed at `<name>/`; when cleanup changed the profile, the universe launched from the cleaned profile is the one kept.
@@ -112,11 +163,15 @@ failed       attempts exhausted, or a variable the profile rightly demands is un
 Incomplete cleanup of the tool's verified universe also ends `failed`, retaining its id and cleanup details in
 the result instead of promoting the draft or launching another verification universe.
 
-The tool destroys only universes it launched itself. Universes the agent launched are the agent's to destroy, in the authoring turns and again in the cleanup turn. A universe whose record's `profile_path` is under the draft can only have come from this run, so any such universe still listed at the end goes into `notes` with its id and `next` names its `destroy` command; the tool does not sweep it, since a sweep by name would take down a universe someone else launched from a profile of the same name.
+The tool destroys only universes identified by its own launch result or launch error. It never infers cleanup
+ownership from a before/after difference in the machine-wide inventory. Universes the agent launched are the
+agent's to destroy, in the authoring turns and again in the cleanup turn. Any universe still listed with a
+`profile_path` under this run's unique draft goes into `notes` with its id and a suggested `destroy` command;
+the tool does not sweep it. Inventory observations support authoring evidence, not destructive authority.
 
 The documentation the agent reads is kept at `~/.digital-twin-universe/reference/`: a sparse, shallow clone of `docker/docs` holding the Compose file reference, the Compose manual, and the build manual, plus the Dockerfile reference fetched from BuildKit, refreshed when older than seven days. Without `git` or without network the reference is reported absent in `notes` and the run goes on.
 
-Raises `profile-exists`, `project-not-found`, `name-invalid`, `keep-needs-verify`, `docker-unavailable`, `profile-rejected` (the agent's submission was unusable after the correction round), `create-timeout` (with the report so far), and the intelligence preflight codes. A failed verification is an outcome, not an exception.
+Raises `profile-exists`, `profile-changed`, `project-not-found`, `name-invalid`, `keep-needs-verify`, `docker-unavailable`, `profile-rejected` (the agent's submission was unusable after the correction round), `create-timeout` (with the report so far), and the intelligence preflight codes. A failed verification is an outcome, not an exception.
 
 ## Profiles
 
@@ -151,7 +206,7 @@ Whether a profile can be launched, and what would be unrealistic about it if it 
 Deterministic. Needs the Docker CLI for `docker compose config`, which does the Compose-side validation.
 
 ```python
-def validate_profile(profile: str | Path) -> ProfileReport
+def validate_profile(profile: str | Path, config: BackendConfig | None = None) -> ProfileReport
 ```
 
 Checks run in this order and every problem is reported, not only the first:
@@ -179,31 +234,64 @@ surfaces cannot adopt legacy records; use the library or CLI for this recovery.
 
 ## Universe
 
-A universe is one Compose project. Its `id` is the project's name, `dtu-<profile name>-<4 hex>`, so `docker compose -p <id> logs` reaches the same stack by hand and `list` can tell two launches of one profile apart.
+A universe is one Compose project. Its `id` is the project's name: `dtu-<profile name>-<32 hex>` for a new random
+launch, or `dtu-op-<32 hex>` for a caller-supplied operation id. Treat ids as opaque. `docker compose -p <id> logs`
+reaches the same stack when used against its pinned endpoint.
 
 What the tool renders for a universe lives in its state directory, `~/.digital-twin-universe/universes/<id>/`: `dtu.yaml`, the overlay; `overlay/`, its CA and self-contained repository snapshots with provenance receipts; `bake.yaml`, a private build-only definition excluding runtime environment; and `universe.json`, the universe record. Explicit build arguments remain saved inputs; use file/environment build secrets for sensitive values. Container state is measured from Docker.
 
+Records are atomically replaced under a private state directory. `lifecycle.yaml` retains only service identities
+and network/volume declarations for later control without rereading a changed or deleted source profile.
+Resolved launch settings briefly reside in private `launch.private.yaml`; normal completion or failure removes
+it, but process death can leave credentials in that file. Recovery never executes it automatically. Arbitrary
+build contexts are not copied by this mechanism; only explicitly exported repository inputs are snapshots.
+
 A profile that serves nothing and rewrites nothing renders no overlay at all, so `dtu.yaml` is absent and the universe is exactly the profile.
 By hand, a universe with the gateway and a build runs as `docker buildx bake --allow=network.host --allow=fs.read=<dir> --load -f bake.yaml`, with one `fs.read` per build context and for `overlay/`, then `docker compose -p <id> -f <profile> -f dtu.yaml up --no-build`. Compose cannot build these itself: it never grants a build the host network, which Buildx 0.37.2 and later require.
-The record is how an id leads back to a universe: every capability that takes an `id` reads it first and raises `universe-not-found` when it is missing. A stack whose directory was deleted by hand is no longer a universe to the tool; `docker compose -p <id> down --volumes` clears it.
+The record is how an id leads back to a universe. Missing records raise `universe-not-found`, except that a
+completed destroy can return its retained cleanup receipt. Do not delete state to reset an uncertain operation:
+it contains the endpoint and ownership needed for recovery. Manually orphaned stacks need operator inspection
+of the exact endpoint and resource labels before removal.
 
-Every capability that acts on a universe returns a `Universe`: the record above, plus `state`, its `services` as Compose reports them (state, health, image), and `urls`, the twin's published ports as the host reaches them: `http://localhost:<host port>/` for each, or the host, path, and label `x-dtu.urls` gives that container port. The entries are kept in the record, so `status` and `list` report them without rereading the profile. A `host` other than `localhost` is reported as written; whether it resolves is the client's business, and the profile reference says which clients honor `*.localhost`.
+`launch`, `status`, and entries from `list_universes` return a `Universe`: the record above, plus `state`, its `services` as Compose reports them (state, health, image), and `urls`, the twin's published ports as the host reaches them: `http://localhost:<host port>/` for each, or the host, path, and label `x-dtu.urls` gives that container port. The entries are kept in the record, so `status` and `list` report them without rereading the profile. A `host` other than `localhost` is reported as written; whether it resolves is the client's business, and the profile reference says which clients honor `*.localhost`.
 
-`state` is `running` when every service is up and healthy, `starting` while any is still becoming healthy, `degraded` when any has exited or is unhealthy, and `stopped` when none is running.
+`state` is `running` when every expected service is up and healthy, `starting` while any is still becoming healthy,
+`degraded` when some are missing, exited, or unhealthy while others run, and `stopped` when none is running.
+`phase` is the retained lifecycle progress, not proof that a process survived; `operation_id` and
+`expected_services` preserve the attempt's identity and intended service set.
 
 ## Launch
 
 From a profile to a running, ready universe, in one call.
 
 ```python
-def launch(profile: str | Path, timeout_seconds: int = 600) -> Universe
+def launch(
+    profile: str | Path,
+    timeout_seconds: int = 600,
+    operation_id: str | None = None,
+    config: BackendConfig | None = None,
+) -> Universe
+
+def launch_id(operation_id: str, config: BackendConfig | None = None) -> str
 ```
 
-Validates the profile and stops on any error, before anything is recorded or started. Assigns an id, renders the overlay, then brings the stack up in the order it needs: the `git` and `gateway` services first when the profile calls for them, then the certificate authority is taken out to the host, then everything else, building with the gateway reachable. Returns when every healthcheck passes.
+`launch_id` computes the id without Docker or effects from a nonempty operation id (up to 512 characters) and
+the canonical state-root path. Persist that caller identity before launching. Repeating a ready operation
+measures its existing environment; repeating an allocated, failed, stopped, or otherwise incomplete operation
+raises `operation-incomplete` without restarting it. A removed operation raises `operation-removed`, and a
+different profile request under an occupied identity raises `operation-conflict`. Use a new operation id only
+for explicitly requested new work. Without one, each call allocates a new random id.
+
+Validates before starting Docker resources, records the owner, renders the overlay, then brings the stack up
+in the order it needs: the `git` and `gateway` services first when the profile calls for them, then the certificate
+authority is taken out to the host, then everything else, building with the gateway reachable. Repository
+readiness waits for all repositories and refs to finish publishing. Returns after Compose's health checks.
 That is `docker compose -p <id> -f <profile> -f <overlay> up --build --wait`, once per pass; Compose's progress is passed through to stderr.
 With the gateway present and Buildx installed, the images are built first with `docker buildx bake --allow=network.host`, since Compose cannot grant a build the host network, and the last pass is `up --no-build --wait`; Bake's progress goes to stderr too.
 
-When something fails after containers have started, they are left running so `doctor` and `docker compose logs` have something to read. `destroy` clears them; every failure's remedy names the command.
+Failures after allocation retain the owned id in `DigitalTwinUniverseError.universe_id` and leave state and
+any started resources for inspection. A killed caller can recover its deterministic id with `launch_id`.
+Inspect first, then stop or export and destroy as appropriate; launch does not replay uncertain effects.
 
 Raises:
 
@@ -214,13 +302,15 @@ Raises:
 - `unhealthy`: the service, its healthcheck, and the last lines of its logs
 - `timeout`: what was still starting when `timeout_seconds` ran out
 - `launch-failed`: anything else Compose refused, with the last lines of its output
+- `operation-id-invalid`, `operation-conflict`, `operation-incomplete`, `operation-removed`, `operation-busy`
+- `allocation-failed`, `docker-endpoint-unknown`, `docker-endpoint-missing`, and repository snapshot errors
 
 ## List
 
-Every universe launched from this machine, running or not, oldest first.
+Every universe recorded under the selected state root, running or not, oldest first.
 
 ```python
-def list_universes() -> list[Universe]
+def list_universes(config: BackendConfig | None = None) -> list[Universe]
 ```
 
 Every record in the state directory, each measured against Docker in one pass. A universe whose containers are gone appears as `stopped` with no services. An empty machine returns an empty list without touching Docker.
@@ -230,7 +320,7 @@ Raises `docker-unavailable`.
 ### Recorded ids
 
 ```python
-def recorded_ids() -> list[str]
+def recorded_ids(config: BackendConfig | None = None) -> list[str]
 ```
 
 Sorted ids with a `universe.json` record on this machine, including failed launches. Reads only the filesystem,
@@ -241,7 +331,7 @@ without Docker inventory or parsing the records. An absent state root returns an
 One universe, measured now. `launch` returns the same measurement.
 
 ```python
-def status(id: str) -> Universe
+def status(id: str, config: BackendConfig | None = None) -> Universe
 ```
 
 Raises `universe-not-found` and `docker-unavailable`.
@@ -257,20 +347,27 @@ def execute(
     user: str | None = None,        # default: the twin's own user
     workdir: str | None = None,     # default: the twin's own working directory
     timeout_seconds: int = 300,
+    max_output_bytes: int = 1048576,  # retained bytes per stream, at most 16 MiB
+    config: BackendConfig | None = None,
 ) -> ExecResult
 ```
 
 The command runs through a login shell (`sh -lc`), so `PATH` changes an installer made in `~/.profile` apply, the way they would in a person's terminal.
 A non-zero exit is a result, not a failure: `execute(id, "curl -sf localhost:8000/health")` returning `22` is the answer.
 
-Raises `universe-not-found`, `twin-not-running` (with the twin's state), `docker-unavailable`, and `timeout`. On `timeout` the command is abandoned, not killed; whatever it started is still running in the twin.
+Both streams are drained while retaining at most `max_output_bytes` each. `stdout_truncated` and
+`stderr_truncated` report discarded output. Raises `universe-not-found`, `twin-not-running`,
+`execution-limit-invalid`, `docker-unavailable`, and `timeout`. A timeout terminates the local Docker client;
+the command may still be running inside the twin. Inspect or stop the environment rather than replaying it.
 
 ## Shell
 
 An interactive shell in the twin, attached to the caller's terminal.
 
 ```python
-def shell(id: str, user: str | None = None, workdir: str | None = None) -> int
+def shell(
+    id: str, user: str | None = None, workdir: str | None = None, config: BackendConfig | None = None
+) -> int
 ```
 
 Returns the shell's exit code when the person leaves it. The shell is `bash -l` when the image has bash, `sh -l` otherwise. In practice only the CLI calls this; it is in the library so the CLI adds nothing.
@@ -300,18 +397,65 @@ codes. Consumers must extract safely without following links outside their desti
 Copy between the host and the twin. `Transfer` says where the copy landed and how many files moved.
 
 ```python
-def push_files(id: str, source: Path, destination: str) -> Transfer
-def pull_files(id: str, source: str, destination: Path) -> Transfer
+def push_files(id: str, source: Path, destination: str, config: BackendConfig | None = None) -> Transfer
+def pull_files(id: str, source: str, destination: Path, config: BackendConfig | None = None) -> Transfer
 ```
 
 Same rules as `docker cp`: when the destination is an existing directory the source is placed inside it under its own name, otherwise the source lands at the destination path itself, and the destination's parent must exist. A path in the twin is resolved against `/`, as `docker cp` does, not the twin's working directory.
-Pushed files end up owned by the twin's user. `docker cp` alone would leave them owned by `root`, which is a trap when the twin runs as a user.
+Pushed files receive the twin user's numeric ownership through a private upload archive, preserving host permissions and avoiding in-container `chown`. Modes and symlink text are preserved without reading symlink targets. Uploads require Linux, WSL, or macOS no-follow reads; native Windows returns `transfer-unsupported`. Preparation and upload are bounded; see `skill("file-push")` for limits and failure recovery.
 
-Raises `universe-not-found`, `twin-not-running`, `source-not-found` (the host path for a push, the twin path for a pull), `transfer-failed` (what `docker cp` refused, with its message), and `docker-unavailable`.
+Both calls require a running twin. A failed upload may leave partial container files; inspect before retrying.
+Pull copies directly onto the host. Use `export_files` for bounded, unextracted retention from a stopped twin.
+
+Raises `universe-not-found`, `twin-not-running`, `source-not-found` (the host path for a push, the twin path for a pull), `transfer-failed`, and `docker-unavailable`. Uploads also report `transfer-limit`, `transfer-timeout`, `transfer-source-changed`, `transfer-file-unsupported`, `transfer-owner-unknown`, or `transfer-path-invalid` when preparation cannot complete safely.
+
+## Stop
+
+```python
+def stop(id: str, config: BackendConfig | None = None, timeout_seconds: int = 10) -> Stopped
+```
+
+Stops exact-project-labelled containers, including orphans, then checks whether any are running or restarting.
+The grace period is 1 to 300 seconds. Containers, volumes, networks, and state remain. `outcome` is `stopped`,
+`incomplete`, or `unknown`; `running=None` means inspection failed. `complete` requires observed cessation and
+no errors. Stop does not resume the environment or replay commands. Raises `timeout-invalid` and shared
+ownership/state errors; Docker stop or inspection failures are reported in `Stopped.errors`.
+
+## Export files
+
+```python
+def export_files(
+    id: str,
+    source: str,
+    destination: Path,
+    max_bytes: int = 268435456,
+    timeout_seconds: int = 60,
+    config: BackendConfig | None = None,
+) -> FileArchive
+```
+
+Streams a tar archive from exactly one owned twin container, running or stopped, without restarting it or
+extracting archive entries on the host. `source` is an absolute container path. The destination directory must
+exist; publication is private, atomic, and never overwrites an existing file. `FileArchive` gives the path,
+byte count, and SHA-256. Limits are 256 MiB and 60 seconds by default, at most 16 GiB and 3600 seconds.
+
+Export preserves only the requested path, not every volume, another service's data, or a complete environment
+backup. Stop first for a stable source; an export from a running container is not a transactional snapshot.
+Treat archive entries as untrusted when opening them elsewhere. Export required paths successfully before
+destroy, and retain the returned receipts. A failed export leaves the environment intact and removes only
+that call's partial archive.
+
+Bounded pipe handling requires Linux, WSL, or macOS; native Windows raises `export-unsupported` before copying.
+Other failures include `export-path-invalid`, `export-limit-invalid`, `export-destination-exists`,
+`export-destination-missing`, `export-twin-ambiguous`, `export-inspection-failed`, `export-timeout`,
+`export-too-large`, `export-empty`, `export-failed`, `export-io-failed`, and shared ownership/state errors.
 
 ## Destroy
 
 Take a universe down and observe its containers, networks, and volumes by exact Compose project label.
+Compose teardown preserves volumes; the tool separately removes only observed owned volumes after a fresh
+identity check, and residual owned networks by immutable id. Declared resource names alone never authorize
+removal. External resources are preserved. Volume removal is non-forced, so an in-use volume remains as residue.
 Built images stay. `Destroyed.removed` names pre-down resources confirmed absent afterwards.
 `remaining` holds post-down names under `containers`, `networks`, and `volumes`; `None` means that inventory failed.
 `errors` names inspection or state-cleanup errors. `outcome` is `removed`, `residue`, or `unknown`.
@@ -323,10 +467,16 @@ the error names manual state cleanup rather than a retry command. `state_removed
 `Destroyed.require_removed()` raises `cleanup-incomplete` otherwise, including for defaulted legacy results without observations.
 The CLI prints the result JSON and exits 1 for incomplete cleanup, 0 for complete cleanup.
 
-Containers get one second after SIGTERM, not Compose's ten: the volumes go with them, so a graceful stop has nothing to preserve, and a process running as PID 1 (`sleep infinity`, `python -m http.server`) ignores the signal and would sit out the full grace period.
+Export required data first. Containers get one second after SIGTERM before forced cessation. Use `stop` when
+the environment and its data should survive. A successful cleanup receipt is retained outside the removed
+state directory; repeating destroy returns that observation without deleting new resources.
+
+Locks and label/identity checks coordinate cooperating callers. Docker volumes have no immutable id or atomic
+compare-and-delete operation, so this is not protection against a privileged daemon operator replacing a
+volume between final inspection and removal.
 
 ```python
-def destroy(id: str) -> Destroyed
+def destroy(id: str, config: BackendConfig | None = None) -> Destroyed
 ```
 
 Raises `universe-not-found` and `docker-unavailable`.

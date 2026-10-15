@@ -1,6 +1,6 @@
 # CLI Reference
 
-The CLI is a thin wrapper over the [library](01-library.md): one command per capability, taking the same arguments under the same names, and doing nothing the library does not. 
+The CLI is a thin wrapper over the [library](01-library.md), doing nothing the library does not. Library-only embedding controls include `BackendConfig.state_root`, stable launch `operation_id`, `launch_id`, and execution output limits.
 What each argument means and what a capability returns or raises is documented there. This page covers only what the CLI adds: the invocation shape, and what reaches stdout, stderr, and the exit code.
 
 Results go to stdout and diagnostics to stderr. A failure the library can name prints its message to stderr and exits 1; a bad invocation exits 2.
@@ -62,6 +62,9 @@ digital-twin-universe create-profile --description "a FastAPI app on port 8000 u
 ```
 
 `lib.create_profile()`, with `--no-verify` as `verify=False`, printed as JSON. One progress line per phase goes to stderr (authoring, validating, launching, checking, destroying, cleaning up); Compose's own progress goes there too through `launch`. The agent's own launches run inside its shell and are not echoed, so the authoring phase is simply long. Exits 0 on `created` or `validated`, 1 on `failed`, and 2 on `--keep` with `--no-verify`.
+
+Every call keeps its own private `<name>.draft-<suffix>/`; use the result's `path` to find it. Concurrent changes
+to the destination cause `profile-changed` instead of overwriting the newer profile, including with `--overwrite`.
 
 ## digital-twin-universe validate-profile
 
@@ -130,13 +133,40 @@ digital-twin-universe file-pull --id <id> --source <twin path> --destination <ho
 
 `lib.push_files()` and `lib.pull_files()`, printed as JSON. Exits 1 with `source-not-found` when the source is missing on its side, and `transfer-failed` when `docker cp` refuses the paths.
 
+Safe upload requires Linux/WSL/macOS host primitives and reports `transfer-unsupported` on native Windows.
+Pull copies onto the host and requires a running twin; use `export-files` for bounded, unextracted retention
+from a stopped container.
+
+## digital-twin-universe stop
+
+```bash
+digital-twin-universe stop --id <id> [--timeout-seconds 10] [--docker-host URI]
+```
+
+`lib.stop()`, printed as JSON. Preserves containers, volumes, and state. Exits 0 only when cessation is observed;
+`incomplete` or `unknown` exits 1. The grace period is 1 to 300 seconds. Stop does not replay or resume commands.
+
+## digital-twin-universe export-files
+
+```bash
+digital-twin-universe export-files --id <id> --source /workspace --destination ./workspace.tar \
+    [--max-bytes 268435456] [--timeout-seconds 60] [--docker-host URI]
+```
+
+`lib.export_files()`, printed as JSON with byte count and SHA-256. Works on a running or stopped twin without
+extracting on the host. The parent directory must exist and the output must be new. Limits are at most 16 GiB
+and 3600 seconds. Only the requested path is retained; export each required path before destroy. Native Windows
+reports `export-unsupported`; Linux/WSL/macOS use bounded pipe handling.
+
 ## digital-twin-universe destroy
 
 ```bash
 digital-twin-universe destroy --id <id>
 ```
 
-`lib.destroy()`, printed as JSON.
+`lib.destroy()`, printed as JSON. Exits 0 only for observed complete cleanup; residue or unknown state exits 1
+and retains recovery information. Unrelated and external resources are preserved. Repeating a completed
+destroy returns its retained receipt. This does not replace exporting needed data first.
 
 ## digital-twin-universe dashboard
 
