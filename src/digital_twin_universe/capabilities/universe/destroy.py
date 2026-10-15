@@ -1,10 +1,14 @@
 """Destroy: take a universe down and forget it."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
 from python_on_whales import ClientNotFoundError, DockerClient
-from python_on_whales.exceptions import DockerException
+from python_on_whales.exceptions import DockerException, NoSuchNetwork, NoSuchVolume
+import yaml
 
 from digital_twin_universe.capabilities.universe import state
 from digital_twin_universe.capabilities.universe.compose import (
@@ -38,15 +42,54 @@ def _destroy_owned(id: str) -> Destroyed:
     client = compose_client(id)
     record.phase = "destroying"
     state.write(record)
-    inventories = _inventories(client, id)
+    inventories = _inventories(
+        client, id, _external_resources(record, "volumes"), _external_resources(record, "networks")
+    )
     try:
         before = {kind: inventory() for kind, inventory in inventories.items()}
-        client.compose.down(volumes=True, remove_orphans=True, quiet=True, timeout=STOP_TIMEOUT_SECONDS)
+        volumes = {}
+        for name in before["volumes"]:
+            try:
+                volumes[name] = _volume_identity(client, name)
+            except NoSuchVolume:
+                continue
+        networks = {}
+        for name in before["networks"]:
+            try:
+                network = client.network.inspect(name)
+                if (network.labels or {}).get(PROJECT_LABEL) == id:
+                    networks[name] = network.id
+            except NoSuchNetwork:
+                continue
+        # Compose removes declared volumes by name, even when another project owns them.
+        client.compose.down(volumes=False, remove_orphans=True, quiet=True, timeout=STOP_TIMEOUT_SECONDS)
     except (ClientNotFoundError, DockerException) as error:
         raise translate_docker_error(error) or error from error
 
     remaining: dict[str, list[str] | None] = {}
     errors: dict[str, str] = {}
+    for name, network_id in networks.items():
+        try:
+            network = client.network.inspect(network_id)
+            if network.id != network_id or (network.labels or {}).get(PROJECT_LABEL) != id:
+                errors[f"network:{name}"] = "Network ownership or identity is uncertain; it was preserved."
+                continue
+            client.network.remove(network_id)
+        except NoSuchNetwork:
+            continue
+        except (ClientNotFoundError, DockerException) as error:
+            errors[f"network:{name}"] = str(translate_docker_error(error) or error)
+    for name, identity in volumes.items():
+        try:
+            current = _volume_identity(client, name)
+            if current != identity or current.project != id or current.created_at is None:
+                errors[f"volume:{name}"] = "Volume ownership or identity is uncertain; it was preserved."
+                continue
+            client.volume.remove(name)
+        except NoSuchVolume:
+            continue
+        except (ClientNotFoundError, DockerException) as error:
+            errors[f"volume:{name}"] = str(translate_docker_error(error) or error)
     removed: list[str] = []
     for kind, inventory in inventories.items():
         try:
@@ -92,11 +135,54 @@ def _destroy_owned(id: str) -> Destroyed:
     )
 
 
-def _inventories(client: DockerClient, id: str) -> dict[str, Callable[[], list[str]]]:
+def _inventories(
+    client: DockerClient, id: str, external_volumes: set[str], external_networks: set[str]
+) -> dict[str, Callable[[], list[str]]]:
     """Exact project labels include stopped containers and orphans without matching unrelated names."""
     filters: list[tuple[Literal["label"], str]] = [("label", f"{PROJECT_LABEL}={id}")]
     return {
         "containers": lambda: [container.name for container in client.container.list(all=True, filters=filters)],
-        "networks": lambda: [network.name for network in client.network.list(filters=filters)],
-        "volumes": lambda: [volume.name for volume in client.volume.list(filters=filters)],
+        "networks": lambda: [
+            network.name for network in client.network.list(filters=filters) if network.name not in external_networks
+        ],
+        "volumes": lambda: [
+            volume.name for volume in client.volume.list(filters=filters) if volume.name not in external_volumes
+        ],
+    }
+
+
+@dataclass(frozen=True)
+class _VolumeIdentity:
+    name: str
+    created_at: datetime | None
+    driver: str
+    mountpoint: Path
+    project: str | None
+    labels: dict[str, str]
+    options: dict[str, str]
+
+
+def _volume_identity(client: DockerClient, name: str) -> _VolumeIdentity:
+    volume = client.volume.inspect(name)
+    labels = volume.labels or {}
+    return _VolumeIdentity(
+        volume.name,
+        volume.created_at,
+        volume.driver,
+        volume.mountpoint,
+        labels.get(PROJECT_LABEL),
+        labels,
+        volume.options or {},
+    )
+
+
+def _external_resources(record: state.UniverseRecord, kind: Literal["networks", "volumes"]) -> set[str]:
+    path = record.state_path / state.LIFECYCLE_FILE
+    if not path.is_file():
+        return set()
+    config = yaml.safe_load(path.read_text()) or {}
+    return {
+        str(definition.get("name", name)).replace("$$", "$")
+        for name, definition in (config.get(kind) or {}).items()
+        if definition and definition.get("external")
     }
