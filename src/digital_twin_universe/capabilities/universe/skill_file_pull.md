@@ -67,24 +67,3 @@ directory merges with what is there and overwrites files of the same name.
   destination was an existing directory, else the destination as given.
 - `files`: how many files are at `destination` afterwards, counted on the host; a file counts
   one, a directory counts the files anywhere under it, including any that were there before.
-
-## Failures
-
-`docker-endpoint-required` means a legacy record has no saved origin: identify the original endpoint and pass
-`--docker-host`. Ambient Docker context and environment variables are not enough. `docker-endpoint-mismatch`
-means an explicit endpoint differs from the record's pinned origin.
-
-A failure prints `message` and `remedy` to stderr and exits 1. Exits 2 on a bad invocation,
-such as a missing option.
-
-The library raises `DigitalTwinUniverseError` with `code`:
-
-- `universe-not-found`: no universe with that id was launched from this machine. The remedy
-  lists the ids that were.
-- `twin-not-running`: the twin's container is absent, exited, or otherwise not running.
-- `source-not-found`: `--source` does not exist in the twin, or the twin's user cannot reach
-  it. The remedy names the `exec` command that lists it.
-- `transfer-failed`: `docker cp` refused, most often because the destination's parent does not
-  exist or a directory would land on an existing file. The message carries Docker's reason.
-- `docker-unavailable`: Docker is missing or its daemon is down; run `digital-twin-universe
-  check`.

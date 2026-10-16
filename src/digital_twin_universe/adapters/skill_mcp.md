@@ -62,24 +62,3 @@ the same JSON as the CLI command each wraps:
 The one resource is `ui://digital-twin-universe/dashboard`, `text/html;profile=mcp-app`: the
 dashboard view, which lists every universe with its state and URLs and offers a destroy
 button, calling the tools above. It may write to the clipboard. Closing it destroys nothing.
-
-## Failures
-
-Exits 0 when the client disconnects. Exits 2 on a bad invocation, such as passing any option.
-
-Before serving, the command prints `message` and `remedy` to stderr and exits 1 when the
-library raises `DigitalTwinUniverseError` with `code`:
-
-- `dashboard-not-compiled`: the view `adapters/static/mcp_app.html` is missing from the
-  package. It ships compiled, so this means a broken install or a source checkout whose build
-  was removed; run `uv run build-dashboard.py` from the repository root.
-
-Once serving, a failing tool call is a tool error, not an exit. Its text is
-`Error executing tool <name>: ` followed by the message and remedy of the
-`DigitalTwinUniverseError` the library raised:
-
-- `universe-not-found`: from `open_dashboard` with `id`, `universe_status`, or
-  `destroy_universe`, when no universe has that id. The remedy names the ids that exist, or
-  the universe id when given a container or image name that starts with one.
-- `docker-unavailable`: Docker is not usable from this process. Run
-  `digital-twin-universe check` for the missing prerequisite.

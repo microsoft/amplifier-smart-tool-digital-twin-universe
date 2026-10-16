@@ -8,8 +8,8 @@ from typer.testing import CliRunner
 
 from digital_twin_universe.cli import app
 from digital_twin_universe.core import skill as skill_module
-from digital_twin_universe.core.skill import CAPABILITIES
-from digital_twin_universe.lib import load_manifest, skill, skill_directory, skill_resources, version
+from digital_twin_universe.core.skill import CAPABILITIES, skill_directory, skill_resources
+from digital_twin_universe.lib import load_manifest, skill, version
 from digital_twin_universe.schemas import (
     DEFAULT_INTELLIGENCE_MODELS,
     DEFAULT_INTELLIGENCE_REASONING_EFFORT,
@@ -113,7 +113,7 @@ def test_a_capability_skill_has_the_tool_s_shape_and_its_own_body(capability: Ca
     assert document.endswith("</skill_content>")
     assert "Part of `digital-twin-universe`; `digital-twin-universe --help` is the tool's skill." in document
     assert f"# digital-twin-universe {capability.name}\n\n{kind}\n\n" in document
-    for section in ("## Arguments", "## Result", "## Failures"):
+    for section in ("## Arguments", "## Result"):
         assert section in document
 
 

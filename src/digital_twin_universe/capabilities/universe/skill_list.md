@@ -38,13 +38,3 @@ A JSON array on stdout, one `Universe` per universe in the shape `launch` prints
 `created_at`. `state` is `running`, `starting`, `degraded`, or `stopped`;
 `digital-twin-universe launch --help` describes every field. A machine with no universes prints
 `[]` without asking Docker.
-
-## Failures
-
-`docker-endpoint-required` means a legacy record has no saved origin: identify the original endpoint and pass
-`--docker-host`. Ambient Docker context and environment variables are not enough. `docker-endpoint-mismatch`
-means an explicit endpoint differs from the record's pinned origin.
-
-When there is at least one universe to measure and Docker is not usable, it prints `message`
-and `remedy` to stderr and exits 1 with `DigitalTwinUniverseError` code `docker-unavailable`;
-run `digital-twin-universe check`.

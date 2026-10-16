@@ -31,9 +31,3 @@ None.
   model-backed commands' agent providers need.
 - `body`: the Markdown below the frontmatter, which `digital-twin-universe --help` prints with
   the capability list after it.
-
-## Failures
-
-Exits 0. Any argument is a bad invocation and exits 2. It reads one file inside the package and
-raises no `DigitalTwinUniverseError`; an install too damaged to read it fails with Python's own
-error and exits 1. Reinstall the tool when that happens.

@@ -17,7 +17,3 @@ The default limit is 256 MiB and 60 seconds; use `--max-bytes` up to 16 GiB and 
 
 The result gives the archive path, byte count and SHA-256. Existing destinations are never overwritten. The archive is not extracted on the host; treat its contents as untrusted when opening it elsewhere.
 Export source and artifacts before destroying an environment whose files must be retained. This operation does not remove containers or volumes.
-
-## Failures
-
-Failure leaves the environment intact and removes only this call's partial archive. An active lifecycle operation returns `operation-busy`. Inspect the named cause before exporting to a new destination.

@@ -11,7 +11,7 @@ Results go to stdout and diagnostics to stderr. A failure the library can name p
 digital-twin-universe -h                 terse summary for a person: the commands, a line each
 digital-twin-universe --help             the tool's skill, written for an agent driving it
 digital-twin-universe <command> -h       terse summary of one command: its options
-digital-twin-universe <command> --help   the command's skill: when to use it, arguments, result, failures
+digital-twin-universe <command> --help   the command's skill: when to use it, arguments, result
 digital-twin-universe -V, --version      the installed version
 ```
 

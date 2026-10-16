@@ -40,10 +40,3 @@ None.
   printed, such as a permission error on its socket. `remedy` is null when present; otherwise
   it says to run `digital-twin-universe install`, then `install --yes`, or to follow Docker's
   install page for this platform, plus the Compose plugin page when Compose is the one missing.
-
-## Failures
-
-Exits 0 when `ok` is true and 1 when it is not, with the report on stdout either way. Any
-argument is a bad invocation and exits 2. It raises no `DigitalTwinUniverseError`: a missing
-prerequisite is part of the report, not a failure. On an operating system other than Linux,
-macOS, or Windows it raises `RuntimeError` naming the system.

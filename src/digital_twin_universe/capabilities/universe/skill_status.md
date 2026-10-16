@@ -31,17 +31,3 @@ describes every field. `state` is `running` when every service is up and healthy
 while a healthcheck is still starting, `degraded` when any service is not running or is
 unhealthy, and `stopped` when none is running, including when its containers were removed
 outside the tool.
-
-## Failures
-
-`docker-endpoint-required` means a legacy record has no saved origin: identify the original endpoint and pass
-`--docker-host`. Ambient Docker context and environment variables are not enough. `docker-endpoint-mismatch`
-means an explicit endpoint differs from the record's pinned origin.
-
-Prints `message` and `remedy` to stderr and exits 1. Exits 2 on a missing `--id`. The library
-raises `DigitalTwinUniverseError` with `code`:
-
-- `universe-not-found`: no universe with that id was launched from this machine, or it was
-  destroyed. The remedy names the right id when the argument was a container or image name,
-  and otherwise lists the ids that exist.
-- `docker-unavailable`: Docker is not usable; run `digital-twin-universe check`.

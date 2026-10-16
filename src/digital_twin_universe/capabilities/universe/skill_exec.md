@@ -82,24 +82,3 @@ gives 127 with the reason in `stdout`.
 
 Without `--command`, nothing is printed; the shell is attached to this terminal and the CLI
 exits with the shell's exit code.
-
-## Failures
-
-`docker-endpoint-required` means a legacy record has no saved origin: identify the original endpoint and pass
-`--docker-host`. Ambient Docker context and environment variables are not enough. `docker-endpoint-mismatch`
-means an explicit endpoint differs from the record's pinned origin.
-
-A failure prints `message` and `remedy` to stderr, prints no JSON, and exits 1. A non-zero exit
-with no JSON on stdout is therefore the tool failing, not the command. Exits 2 on a bad
-invocation, such as a missing `--id`.
-
-The library raises `DigitalTwinUniverseError` with `code`:
-
-- `universe-not-found`: no universe with that id was launched from this machine. The remedy
-  lists the ids that were.
-- `twin-not-running`: the twin's container is absent, exited, or otherwise not running. The
-  message names its state; the remedy names `docker compose -p <id> ps`.
-- `docker-unavailable`: Docker is missing or its daemon is down; run `digital-twin-universe
-  check`.
-- `timeout`: `--command` was still running after `--timeout-seconds`.
-- `no-tty`: no `--command`, and stdin or stdout is not a terminal.

@@ -38,11 +38,3 @@ Bounds: 100,000 selected files, 128 MiB per regular file, 1 GiB selected content
 seconds per Git operation. Repository publishing additionally limits history export to 2 GiB. If exceeded,
 prepare a smaller explicit checkout. Safe snapshots currently require Linux/macOS no-follow directory reads;
 other DTU capabilities remain available on Windows.
-
-## Failures
-
-Failures raise `DigitalTwinUniverseError` (CLI exit 1): `git-missing`, `repository-snapshot-unsupported`,
-`repository-not-root`, `repository-unmerged`, `repository-path-invalid`, `repository-file-unsupported`,
-`repository-source-changed`, `repository-snapshot-limit`, `repository-snapshot-failed`,
-`snapshot-destination-exists`, `snapshot-destination-inside-source`, or `snapshot-destination-missing`.
-No partial archive is promoted.
