@@ -55,24 +55,3 @@ Exit 0 requires complete observed cleanup; residue or uncertainty exits 1 and re
 The library's `complete` property checks all observations; `require_removed()` raises `cleanup-incomplete`
 otherwise. A completed cleanup receipt is retained outside the removed directory, so repeating destroy can
 return the same result without repeating Docker effects.
-
-## Failures
-
-`docker-endpoint-required` means a legacy record has no saved origin: identify the original endpoint and pass
-`--docker-host`. Ambient Docker context and environment variables are not enough. `docker-endpoint-mismatch`
-means an explicit endpoint differs from the record's pinned origin.
-
-A failure prints `message` and `remedy` to stderr and exits 1. Exits 2 on a bad invocation,
-such as a missing `--id`.
-
-The library raises `DigitalTwinUniverseError` with `code`:
-
-- `universe-not-found`: no record or completed cleanup receipt exists under the selected state root.
-  The remedy lists recorded ids.
-- `operation-busy`: another lifecycle operation holds this universe's lock; inspect before retrying.
-- `docker-unavailable`: Docker is missing or its daemon is down; run `digital-twin-universe
-  check`. Nothing is removed, and the state directory stays so the destroy can be retried.
-
-An in-use or changed volume is preserved and reported as residue or uncertainty. Exact labels, fresh identity
-checks, and lifecycle locks coordinate cooperating callers; they are not protection against a privileged
-daemon operator replacing resources during cleanup.

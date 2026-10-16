@@ -63,22 +63,3 @@ errors to stderr.
 
 The process keeps serving until Ctrl+C or a signal ends it. The page reads the universes live
 through the MCP server, so it never needs restarting for a new universe.
-
-## Failures
-
-Exits 0 when interrupted with Ctrl+C. Exits 2 on a bad invocation, such as a `--port` that is
-not a number.
-
-Anything else prints `message` and `remedy` to stderr and exits 1 before anything is printed on
-stdout. The library raises `DigitalTwinUniverseError` with `code`:
-
-- `port-in-use`: binding failed, most often because `--port` is held by another process. The
-  same code covers a `--host` that is not an address of this machine. Omit `--port` to have a
-  free one chosen.
-- `dashboard-not-compiled`: the MCP App view `adapters/static/mcp_app.html` is missing from
-  the package. It ships compiled, so this means a broken install or a source checkout whose
-  build was removed; run `uv run build-dashboard.py` from the repository root.
-
-A missing host page under `capabilities/dashboard/static/` is not raised: the page answers 503
-with the same build command. Docker problems never stop the dashboard from starting; they fail
-the MCP call the page makes, as a tool error carrying the message and remedy.

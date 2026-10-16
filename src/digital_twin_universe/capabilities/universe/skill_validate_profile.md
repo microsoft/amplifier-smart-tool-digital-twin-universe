@@ -93,15 +93,3 @@ Warning codes, all about the twin except the last:
 - `errors` and `warnings`: findings, each with `code`, `location` (such as
   `services.twin.volumes[0]` or `x-dtu.urls[1].port`, or null for the whole file), `message`,
   and `remedy`.
-
-## Failures
-
-Exits 0 when `ok` is true and 1 when it is not, with the report on stdout either way. Exits 2 on
-a bad invocation, such as a missing `--profile`.
-
-When there is no profile to report on, it prints `message` and `remedy` to stderr and exits 1.
-The library raises `DigitalTwinUniverseError` with `code`:
-
-- `profile-not-found`: the path does not exist, a directory holds no Compose file, or no
-  profile has that name; the message lists every place it looked.
-- `docker-unavailable`: Docker is not usable; run `digital-twin-universe check`.
