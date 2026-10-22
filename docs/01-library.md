@@ -385,6 +385,10 @@ export-ignore or export-subst transformations are applied. Source files and inde
 archive is never replaced, and detected concurrent source changes fail without retry. Source credentials are
 not scrubbed: the caller approves what source it exports.
 
+Archive consistency checks cover the selected checkout's HEAD, branch, index and file contents. Unrelated
+branch or tag changes, including commits in other linked worktrees, do not invalidate an archive that excludes
+history. Repository exports that include history still require stable local branches and tags.
+
 Returns archive path, byte count and SHA256, source HEAD/branch, snapshot tree/commit, file count and shallow
 source flag. Safe file reads currently require Linux, WSL or macOS; native Windows reports
 `repository-snapshot-unsupported`. See `export-repository-snapshot --help` for the named size bounds and failure

@@ -121,11 +121,13 @@ class Git:
                 raise _error("repository-snapshot-limit", "Repository export exceeded its size limit.")
 
 
-def _identity(git: Git, source: Path) -> tuple[bytes, bytes, bytes, bytes]:
+def _identity(git: Git, source: Path, history: bool) -> tuple[bytes, bytes, bytes, bytes]:
     return (
         git.run(source, "rev-parse", "HEAD").strip(),
         git.run(source, "rev-parse", "--abbrev-ref", "HEAD").strip(),
-        git.run(source, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads", "refs/tags"),
+        git.run(source, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads", "refs/tags")
+        if history
+        else b"",
         git.run(source, "ls-files", "--stage", "-z"),
     )
 
@@ -229,7 +231,7 @@ def export(source: Path, destination: Path, history: bool = True) -> dict[str, s
     try:
         if Path(os.fsdecode(git.run(source, "rev-parse", "--show-toplevel").strip())).resolve() != source:
             raise _error("repository-not-root", "Publish a repository or linked worktree root, not its subdirectory.")
-        identity = _identity(git, source)
+        identity = _identity(git, source, history)
         head, branch, refs, index = identity
         object_format = git.run(source, "rev-parse", "--show-object-format").decode().strip()
         shallow = git.run(source, "rev-parse", "--is-shallow-repository").strip() == b"true"
@@ -246,9 +248,9 @@ def export(source: Path, destination: Path, history: bool = True) -> dict[str, s
                 git.run(destination, "update-ref", ref, oid)
         entries = _tree_entries(git, source, index, destination, object_format)
         if (
-            _identity(git, source) != identity
+            _identity(git, source, history) != identity
             or _tree_entries(git, source, index, None, object_format) != entries
-            or _identity(git, source) != identity
+            or _identity(git, source, history) != identity
         ):
             raise _error(
                 "repository-source-changed", "The source files, index, HEAD, or local refs changed during export."
