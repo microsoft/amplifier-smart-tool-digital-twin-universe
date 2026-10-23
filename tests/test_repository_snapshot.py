@@ -172,6 +172,96 @@ def test_source_changes_abort_without_retry_or_leaving_snapshot(
     assert not (tmp_path / "snapshot").exists()
 
 
+@pytest.mark.parametrize("history", [False, True])
+@pytest.mark.parametrize("change", ["sibling-commit", "new-tag", "deleted-tag"])
+def test_unrelated_refs_only_invalidate_exports_that_include_history(
+    repository: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    history: bool,
+    change: str,
+) -> None:
+    sibling = tmp_path / "sibling"
+    git(repository, "worktree", "add", "-qb", "sibling", str(sibling))
+    selected_head = git(repository, "rev-parse", "HEAD").decode().strip()
+    selected_index = git(repository, "ls-files", "--stage", "-z")
+    original = snapshots._tree_entries
+    changed = False
+
+    def concurrent_ref_change(
+        command: snapshots.Git, source: Path, index: bytes, destination: Path | None, object_format: str
+    ) -> dict[str, tuple[str, str]]:
+        nonlocal changed
+        entries = original(command, source, index, destination, object_format)
+        if not changed:
+            changed = True
+            if change == "sibling-commit":
+                (sibling / "changed").write_text("independent worktree edit")
+                git(sibling, "commit", "-qam", "independent change")
+            elif change == "new-tag":
+                git(sibling, "tag", "unrelated-new-tag")
+            else:
+                git(sibling, "tag", "-d", "v1")
+        return entries
+
+    monkeypatch.setattr(snapshots, "_tree_entries", concurrent_ref_change)
+    destination = tmp_path / ("snapshot" if history else "source.tar")
+    if history:
+        with pytest.raises(DigitalTwinUniverseError) as raised:
+            snapshots.export(repository, destination)
+        assert raised.value.code == "repository-source-changed"
+        assert raised.value.message == "The source files, index, HEAD, or local refs changed during export."
+        assert not destination.exists()
+    else:
+        result = lib.export_repository_snapshot(repository, destination)
+        assert result.source_head == selected_head
+        assert result.source_branch == "main"
+        with tarfile.open(destination) as archive:
+            content = archive.extractfile("changed")
+            assert content is not None
+            assert content.read() == b"original"
+            assert ".git" not in archive.getnames()
+    assert changed
+    assert git(repository, "rev-parse", "HEAD").decode().strip() == selected_head
+    assert git(repository, "ls-files", "--stage", "-z") == selected_index
+    assert not list(tmp_path.glob("dtu-snapshot-*"))
+
+
+@pytest.mark.parametrize("change", ["head", "branch", "index", "tracked", "untracked"])
+def test_archive_still_rejects_selected_identity_or_content_changes(
+    repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    original = snapshots._tree_entries
+    changed = False
+
+    def concurrent_source_change(
+        command: snapshots.Git, source: Path, index: bytes, destination: Path | None, object_format: str
+    ) -> dict[str, tuple[str, str]]:
+        nonlocal changed
+        entries = original(command, source, index, destination, object_format)
+        if not changed:
+            changed = True
+            if change == "head":
+                git(source, "commit", "--allow-empty", "-qm", "selected head changed")
+            elif change == "branch":
+                git(source, "branch", "-m", "renamed")
+            elif change == "index":
+                git(source, "update-index", "--chmod=+x", "changed")
+            else:
+                (source / ("changed" if change == "tracked" else "new-file")).write_text("selected edit")
+        return entries
+
+    monkeypatch.setattr(snapshots, "_tree_entries", concurrent_source_change)
+    destination = tmp_path / "source.tar"
+    with pytest.raises(DigitalTwinUniverseError) as raised:
+        lib.export_repository_snapshot(repository, destination)
+    assert raised.value.code == "repository-source-changed"
+    assert raised.value.message == "The source files, index, or HEAD changed during export."
+    assert changed
+    assert not destination.exists()
+    assert not list(tmp_path.glob("dtu-snapshot-*"))
+
+
 def test_snapshot_file_bound_is_explicit(repository: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(snapshots, "MAX_FILE_BYTES", 2)
     with pytest.raises(DigitalTwinUniverseError) as raised:
