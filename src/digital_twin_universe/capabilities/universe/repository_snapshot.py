@@ -121,15 +121,20 @@ class Git:
                 raise _error("repository-snapshot-limit", "Repository export exceeded its size limit.")
 
 
-def _identity(git: Git, source: Path, history: bool) -> tuple[bytes, bytes, bytes, bytes]:
+def _identity(git: Git, source: Path) -> tuple[bytes, bytes, bytes]:
     return (
         git.run(source, "rev-parse", "HEAD").strip(),
         git.run(source, "rev-parse", "--abbrev-ref", "HEAD").strip(),
-        git.run(source, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads", "refs/tags")
-        if history
-        else b"",
         git.run(source, "ls-files", "--stage", "-z"),
     )
+
+
+def _refs(git: Git, source: Path) -> bytes:
+    return git.run(source, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads", "refs/tags")
+
+
+def _unchanged(git: Git, source: Path, identity: tuple[bytes, bytes, bytes], refs: bytes | None) -> bool:
+    return _identity(git, source) == identity and (refs is None or _refs(git, source) == refs)
 
 
 def _selection(git: Git, source: Path, index: bytes) -> dict[str, tuple[str, str]]:
@@ -231,12 +236,13 @@ def export(source: Path, destination: Path, history: bool = True) -> dict[str, s
     try:
         if Path(os.fsdecode(git.run(source, "rev-parse", "--show-toplevel").strip())).resolve() != source:
             raise _error("repository-not-root", "Publish a repository or linked worktree root, not its subdirectory.")
-        identity = _identity(git, source, history)
-        head, branch, refs, index = identity
+        identity = _identity(git, source)
+        head, branch, index = identity
+        refs = _refs(git, source) if history else None
         object_format = git.run(source, "rev-parse", "--show-object-format").decode().strip()
         shallow = git.run(source, "rev-parse", "--is-shallow-repository").strip() == b"true"
         git.run(destination, "init", "--bare", f"--object-format={object_format}", "--template=", "-q")
-        if history and not shallow:
+        if refs is not None and not shallow:
             objects = b"\n".join(sorted({head, *(line.split()[0] for line in refs.splitlines())})) + b"\n"
             with TemporaryFile(dir=destination) as packed:
                 git.write(source, ("pack-objects", "--revs", "--stdout"), packed, MAX_HISTORY_BYTES, objects)
@@ -248,13 +254,12 @@ def export(source: Path, destination: Path, history: bool = True) -> dict[str, s
                 git.run(destination, "update-ref", ref, oid)
         entries = _tree_entries(git, source, index, destination, object_format)
         if (
-            _identity(git, source, history) != identity
+            not _unchanged(git, source, identity, refs)
             or _tree_entries(git, source, index, None, object_format) != entries
-            or _identity(git, source, history) != identity
+            or not _unchanged(git, source, identity, refs)
         ):
-            raise _error(
-                "repository-source-changed", "The source files, index, HEAD, or local refs changed during export."
-            )
+            checked = "source files, index, HEAD, or local refs" if refs is not None else "source files, index, or HEAD"
+            raise _error("repository-source-changed", f"The {checked} changed during export.")
         listing = b"".join(
             f"{mode} {oid}\t".encode() + os.fsencode(name) + b"\0" for name, (mode, oid) in entries.items()
         )
