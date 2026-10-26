@@ -192,10 +192,11 @@ When nothing is found, the capability raises `profile-not-found`, saying what it
 
 ```
 examples/
-  hello/                The smallest universe: an Alpine twin with nothing installed
-  copilot-cli/          GitHub Copilot CLI installed as a user would, signed in with the host's GH_TOKEN
-  served-repository/    A local git repository cloned in the twin from the URL it stands in for
-  web-site/             A static site opened from the host's browser at the URLs `x-dtu.urls` names
+  hello/                  The smallest universe: an Alpine twin with nothing installed
+  copilot-cli/            GitHub Copilot CLI installed as a user would, signed in with the host's GH_TOKEN
+  served-repository/      A local git repository cloned in the twin from the URL it stands in for
+  amplifier-modules-dtu/  Amplifier installed from GitHub, with local checkouts of its repositories served in their place
+  web-site/               A static site opened from the host's browser at the URLs `x-dtu.urls` names
 ```
 
 ## Validate profile
@@ -554,6 +555,6 @@ Another implementation is a module satisfying the protocol and a branch in that 
 ## Adding a capability
 
 A capability's code goes in `digital_twin_universe/capabilities/<name>/`, with its prompts and templates beside it, and `lib.py` gets a facade function that imports it and is the only caller of it.
-It also gets a row in `CAPABILITIES` in `core/skill.py` naming its skill, a Markdown file `skill_<capability>.md` beside its code, the capability's name with hyphens as underscores, that carries when to use it, a worked invocation, every argument, and the result.
+It also gets a row in `CAPABILITIES` in `core/skill.py` naming its skill, a Markdown file `skills/skill_<capability>.md` in its folder, the capability's name with hyphens as underscores, that carries when to use it, a worked invocation, every argument, and the result.
 Each capability of the library gets a section here: what it does and when to reach for it, the signature `lib.py` exposes, what each argument means, and what it returns or raises. Name the result class; describe a field only when its name does not say enough.
 Model-backed capabilities say so, and take `agent_provider`, `model`, and `reasoning_effort`, defaulting to the first installed agent provider, its model in `DEFAULT_INTELLIGENCE_MODELS`, and `DEFAULT_INTELLIGENCE_REASONING_EFFORT` from `digital_twin_universe.schemas`.

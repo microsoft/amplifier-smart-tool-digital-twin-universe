@@ -1,0 +1,38 @@
+# Amplifier installed in the twin from its public URLs, with local checkouts of its repositories answering in place
+# of GitHub. Change a module or the kernel on this machine and see what a user who installs Amplifier would get.
+#
+#   export DTU_AMPLIFIER_CORE=~/code/amplifier-core
+#   export DTU_PROVIDER_ANTHROPIC=~/code/amplifier-module-provider-anthropic
+#   export ANTHROPIC_API_KEY=sk-ant-...
+#   digital-twin-universe launch --profile amplifier-modules-dtu --timeout-seconds 1200
+#   digital-twin-universe exec --id <id> --command 'amplifier run "Say hello"'
+#
+# Every Amplifier repository installs from https://github.com/microsoft/<repo>, so serving another local one, such
+# as amplifier-foundation, a bundle, a module, or amplifier-app-cli, is one more pair under `repositories`:
+#
+#   - path: ${DTU_FOUNDATION:?set it to a local amplifier-foundation checkout}
+#     url: https://github.com/microsoft/amplifier-foundation
+name: amplifier-modules-dtu
+
+x-dtu:
+  description: Amplifier installed as a user would, with a local amplifier-core and provider-anthropic served in place of GitHub
+  twin_machine: amplifier
+  repositories:
+    # The working tree is served as it is, so uncommitted changes are tested too.
+    # amplifier-core: remove this entry together with the amplifier-core stage in the Dockerfile.
+    - path: ${DTU_AMPLIFIER_CORE:?set it to a local amplifier-core checkout, such as ~/code/amplifier-core}
+      url: https://github.com/microsoft/amplifier-core
+    # Only the checked-out branch is served, and settings.yaml in the Dockerfile installs the provider from `@main`.
+    - path: ${DTU_PROVIDER_ANTHROPIC:?set it to a local amplifier-module-provider-anthropic checkout on branch main}
+      url: https://github.com/microsoft/amplifier-module-provider-anthropic
+
+services:
+  amplifier:
+    build: .
+    # Read from the host at launch, never written to any file. Unset, it fails with this message.
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY to an Anthropic API key, for example `export ANTHROPIC_API_KEY=sk-ant-...`}
+    # Keeps the twin up for exec, since the install already happened during the build.
+    command: sleep infinity
+    healthcheck:
+      test: [CMD, /home/user/.local/bin/amplifier, --version]

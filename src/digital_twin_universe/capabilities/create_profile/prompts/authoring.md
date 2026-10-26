@@ -143,6 +143,8 @@ Complete profiles known to launch, under `{examples}`. Read the one closest to t
   `${GH_TOKEN:?...}`. The shape for any CLI that needs a key.
 - `served-repository/` -- a local git repository cloned during the build from the URL it stands in for, with the
   two `dtu-ca` lines. The shape for installing the project you were pointed at.
+- `amplifier-modules-dtu/` -- Amplifier installed from GitHub with several local repositories served in place of
+  theirs, and a Rust build stage whose wheel uv finds through `UV_FIND_LINKS`. The shape for a multi-repo ecosystem.
 - `web-site/` -- a server on a published port with `x-dtu.urls` naming what the host's browser opens, with a
   `:-` default for the host port. The shape for any web app.
 
