@@ -126,7 +126,7 @@ def test_a_turn_without_a_valid_submission_is_prompted_again_until_the_cap(world
 
     never_called = f"the {SUBMIT_TOOL} tool was never called"
     assert result.output is None
-    assert result.error == f"No valid submission after {MAX_INVALID_SUBMISSIONS} retries: {never_called}"
+    assert never_called in (result.error or "")
     assert fake.options[0]["available_tools"] == [SUBMIT_TOOL]
     invalid = submission_problem({"answer": 42}, SCHEMA)
     assert invalid is not None

@@ -3,11 +3,11 @@
 Every check runs `docker compose config`, so the whole file needs a daemon. Nothing here launches anything.
 """
 
-from collections.abc import Callable
 from pathlib import Path
 import textwrap
 from typing import Any
 
+from fakes import MakeRepository
 import pytest
 
 from digital_twin_universe import lib
@@ -15,8 +15,6 @@ from digital_twin_universe.capabilities.universe.profile import EXAMPLES_DIRECTO
 from digital_twin_universe.schemas import DigitalTwinUniverseError
 
 pytestmark = pytest.mark.needs_docker
-
-MakeRepository = Callable[[str, dict[str, str]], Path]
 
 VALID = """\
 name: valid

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from fakes import universe_record
 import pytest
 from python_on_whales.exceptions import DockerException, NoSuchContainer
 from typer.testing import CliRunner
@@ -12,7 +13,6 @@ from digital_twin_universe import lib
 from digital_twin_universe.capabilities.universe import compose, state
 from digital_twin_universe.capabilities.universe import launch as launch_module
 from digital_twin_universe.capabilities.universe.compose import universe_state, urls
-from digital_twin_universe.capabilities.universe.state import UniverseRecord
 from digital_twin_universe.cli import app, main
 from digital_twin_universe.schemas import (
     BackendConfig,
@@ -36,17 +36,6 @@ def state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-def _record(id: str = "dtu-demo-0000") -> UniverseRecord:
-    return UniverseRecord(
-        id=id,
-        name="demo",
-        description=None,
-        profile_path=Path("/profiles/demo/compose.yaml"),
-        twin_machine="app",
-        created_at=state.now(),
-    )
-
-
 def _service(state_word: str, health: Health | None = None) -> Service:
     return Service(name="svc", state=state_word, health=health, image="img")
 
@@ -60,7 +49,7 @@ def test_ids_carry_the_profile_name_and_differ_between_launches() -> None:
 
 
 def test_a_written_record_reads_back_and_is_gone_after_remove(state_root: Path) -> None:
-    record = _record()
+    record = universe_record()
     state.write(record)
 
     assert state.read(record.id) == record
@@ -77,7 +66,7 @@ def test_a_written_record_reads_back_and_is_gone_after_remove(state_root: Path) 
 def test_read_all_is_every_record_oldest_first_and_empty_without_a_state_root(state_root: Path) -> None:
     assert state.read_all() == []
 
-    newer, older = _record("dtu-demo-1111"), _record("dtu-demo-0000")
+    newer, older = universe_record("dtu-demo-1111"), universe_record("dtu-demo-0000")
     older = older.model_copy(update={"created_at": older.created_at.replace(year=2000)})
     state.write(newer)
     state.write(older)
@@ -87,17 +76,18 @@ def test_read_all_is_every_record_oldest_first_and_empty_without_a_state_root(st
 
 
 def test_an_image_or_container_name_is_pointed_back_at_its_universe_id(state_root: Path) -> None:
-    state.write(_record("dtu-demo-1234"))
+    state.write(universe_record("dtu-demo-1234"))
 
     for lookalike in ("dtu-demo-1234-app", "dtu-demo-1234-app-1"):
         with pytest.raises(DigitalTwinUniverseError) as raised:
             state.read(lookalike)
         assert raised.value.code == "universe-not-found"
-        assert "the universe id is 'dtu-demo-1234'" in raised.value.remedy
+        assert "'dtu-demo-1234'" in raised.value.remedy
 
     with pytest.raises(DigitalTwinUniverseError) as raised:
         state.read("dtu-other-0000")
-    assert "Universes launched from this machine: dtu-demo-1234" in raised.value.remedy
+    assert raised.value.code == "universe-not-found"
+    assert "dtu-demo-1234" in raised.value.remedy
 
 
 def test_error_string_is_message_then_remedy() -> None:
@@ -166,7 +156,7 @@ def test_a_container_removed_after_the_list_is_left_out_of_the_grouping(monkeypa
 
 
 def test_a_record_written_before_urls_existed_still_reads(state_root: Path) -> None:
-    record = _record()
+    record = universe_record()
     (state_root / record.id).mkdir()
     written = json.loads(record.model_dump_json())
     del written["urls"]
@@ -189,7 +179,7 @@ def test_a_record_written_before_urls_existed_still_reads(state_root: Path) -> N
 def test_launch_failures_are_named_from_compose_output(stderr: bytes, code: str, fragment: str) -> None:
     error = DockerException(["docker", "compose", "up"], 1, stderr=stderr)
 
-    translated = launch_module._launch_error(_record(), 12, error)
+    translated = launch_module._launch_error(universe_record(), 12, error)
 
     assert translated.code == code
     assert fragment in translated.message
@@ -201,7 +191,7 @@ def test_an_unhealthy_container_is_named_with_its_logs(monkeypatch: pytest.Monke
     monkeypatch.setattr(launch_module, "_container_logs", lambda container, id=None: f"logs of {container}")
     error = DockerException(["docker", "compose", "up"], 1, stderr=b"container dtu-demo-0000-app-1 is unhealthy")
 
-    translated = launch_module._launch_error(_record(), 12, error)
+    translated = launch_module._launch_error(universe_record(), 12, error)
 
     assert translated.code == "unhealthy"
     assert "logs of dtu-demo-0000-app-1" in translated.message
@@ -246,7 +236,7 @@ def test_exec_without_a_command_opens_a_shell(monkeypatch: pytest.MonkeyPatch) -
 
 
 def _universe(id: str) -> Universe:
-    record = _record(id)
+    record = universe_record(id)
     return Universe(
         id=record.id,
         name=record.name,

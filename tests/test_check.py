@@ -47,6 +47,7 @@ def test_probing_stops_at_the_first_missing_prerequisite(monkeypatch: pytest.Mon
     assert not report.ok
     assert report.docker_version is None
     assert report.compose_version is None
+    assert [prerequisite.name for prerequisite in report.prerequisites] == ["docker-cli", "docker-daemon"]
     assert report.prerequisites[-1].remedy == "install docker-daemon"
 
 

@@ -1,23 +1,20 @@
 """Fixtures shared by the test suite: Docker availability, host ports, state isolation, and git repositories."""
 
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from contextlib import suppress
+import functools
 import itertools
 from pathlib import Path
 import shutil
 import socket
-import subprocess
 
+from fakes import PROBE_FILES, MakeRepository, create_repository
 import pytest
 
 from digital_twin_universe import lib
 from digital_twin_universe.capabilities.universe import state
 
 NEEDS_DOCKER = "needs_docker"
-# A committer the host's global git config cannot change, so a commit works on a machine with no identity set.
-GIT = ("git", "-c", "user.email=test@dtu.invalid", "-c", "user.name=DTU Test", "-c", "commit.gpgsign=false")
-
-MakeRepository = Callable[[str, dict[str, str]], Path]
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -70,40 +67,10 @@ def state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 @pytest.fixture
 def make_repository(tmp_path: Path) -> MakeRepository:
     """Build a git repository on the host with one commit, for a profile to serve."""
-
-    def make(name: str, files: dict[str, str]) -> Path:
-        repository = tmp_path / "repositories" / name
-        repository.mkdir(parents=True)
-        for relative, content in files.items():
-            path = repository / relative
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content)
-        subprocess.run(["git", "init", "-b", "main", "-q"], cwd=repository, check=True)
-        subprocess.run([*GIT, "add", "."], cwd=repository, check=True)
-        subprocess.run([*GIT, "commit", "-q", "-m", "initial"], cwd=repository, check=True)
-        return repository
-
-    return make
+    return functools.partial(create_repository, tmp_path / "repositories")
 
 
 @pytest.fixture
 def served_repository(make_repository: MakeRepository) -> Path:
     """An installable repository with a known marker in its committed content and in its console script."""
-    return make_repository(
-        "probe",
-        {
-            "MARKER.txt": "served-from-the-universe\n",
-            "pyproject.toml": (
-                "[project]\n"
-                'name = "dtu-probe"\n'
-                'version = "0.1.0"\n'
-                'requires-python = ">=3.10"\n'
-                "[project.scripts]\n"
-                'dtu-probe = "dtu_probe:main"\n'
-                "[build-system]\n"
-                'requires = ["hatchling"]\n'
-                'build-backend = "hatchling.build"\n'
-            ),
-            "src/dtu_probe/__init__.py": 'def main() -> None:\n    print("dtu-probe-installed")\n',
-        },
-    )
+    return make_repository("probe", PROBE_FILES)

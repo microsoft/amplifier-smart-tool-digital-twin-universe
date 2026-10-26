@@ -16,7 +16,7 @@ from digital_twin_universe.capabilities.universe import runtime, state
 from digital_twin_universe.capabilities.universe.compose import PROJECT_LABEL
 from digital_twin_universe.schemas import BackendConfig
 
-pytestmark = [pytest.mark.needs_docker, pytest.mark.live]
+pytestmark = [pytest.mark.needs_docker, pytest.mark.lifecycle]
 
 
 def test_failed_launch_cleanup_preserves_peer_data_and_removes_owned_resources(tmp_path: Path) -> None:
