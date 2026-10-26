@@ -34,7 +34,7 @@ jobs:
       - name: Type check
         run: uv run ty check
 
-      # No model credentials in CI. Docker is on the runner, so needs_docker and live tests run.
+      # No model credentials in CI. Docker is on the runner, so every other slow test runs.
       - name: Tests
         run: uv run pytest -q -m "not model"
 

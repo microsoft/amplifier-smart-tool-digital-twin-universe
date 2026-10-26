@@ -82,18 +82,20 @@ Run tests:
 uv run pytest
 ```
 
-The full suite launches real universes and takes about a minute on up to eight xdist workers. While iterating, run what is relevant:
+This runs everything that does not launch a universe or call a model, in a few seconds on up to eight xdist workers. It needs Docker for `docker compose config`. The slow tests carry a marker that says which changes call for them (`markers` in `pyproject.toml`). Run the ones a change touches:
 
 ```bash
-# Everything that does not launch a universe, a few seconds. Needs Docker for `docker compose config`.
-uv run pytest -m "not live"
+# One group of slow tests, or every test (about a minute and a half without `model`)
+uv run pytest -m overlay
+uv run pytest -m ""
+uv run pytest -m "not model"
 
-# One live file, or one test in it
-uv run pytest tests/test_live_universe.py
-uv run pytest tests/test_live_overlay.py -k served_repository
+# One slow file, or one test in it; -m "" lifts the default deselection
+uv run pytest -m "" tests/test_live_universe.py
+uv run pytest -m "" tests/test_live_overlay.py -k working_tree
 
 # In-process, for a debugger or -s
-uv run pytest -n0 tests/test_live_universe.py -k round_trip -s
+uv run pytest -n0 -m "" tests/test_live_universe.py -k web_site -s
 ```
 
 Each worker hands out host ports from its own range (`free_port` in `tests/conftest.py`), so parallel launches never collide on a port.
@@ -103,7 +105,7 @@ Run the deterministic capabilities on an install without any agent provider, the
 ```bash
 uv sync --no-extra copilot --no-extra amplifier-agent --no-extra codex --no-extra claude
 uv run digital-twin-universe manifest
-uv run pytest -m "not model and not live"
+uv run pytest
 uv sync --all-extras --all-groups
 ```
 

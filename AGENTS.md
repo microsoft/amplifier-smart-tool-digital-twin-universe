@@ -3,7 +3,7 @@ This is a Smart Tool that must conform to Microsoft's [Amplifier Smart Tool Spec
 ## Orientation
 
 - If not already, set up the environment by following docs/DEVELOPMENT.md. It also has every command for linting, formatting, type checking, testing, and running the conformance kit.
-- After making changes, `prek run --all-files` and `uv run pytest` must pass before the work is done.
+- After making changes, `prek run --all-files` and `uv run pytest` must pass before the work is done. The slow tests should only be run when the changes touch that code.
 - `docs/00-vision.md` is the source of truth for what this tool is and is not, and `docs/01-library.md` for what it exposes. Then `README.md` and `docs/DEVELOPMENT.md`, then the rest of `docs/`. Both are written for people and stay concise. When work changes any of them, propose the doc updates at the end and call out contradictions.
 - The library is the tool. Every capability lives in the library and is reachable from `lib.py`. The CLI and any other surface are thin wrappers: argument parsing and I/O conventions, then a call into the library. Capability that exists only in a wrapper is a defect.
 - Each domain capability lives in `capabilities/<name>/`, with its prompts and templates beside its code. `lib.py` imports it and is the only place that does. `core/` holds only what every smart tool has: the manifest and the skill.

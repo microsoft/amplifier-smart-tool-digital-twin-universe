@@ -125,7 +125,6 @@ def test_an_unset_variable_is_named_with_the_profile_message(tmp_path: Path) -> 
     translated = profile_module._profile_error(tmp_path, error)
 
     assert translated.code == "env-missing"
-    assert "TOKEN" in translated.message
     assert "Set TOKEN first" in translated.message
 
 

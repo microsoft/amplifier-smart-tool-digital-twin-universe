@@ -7,7 +7,9 @@ import sys
 from types import SimpleNamespace
 from typing import Any, cast
 
+from fakes import universe_record
 import pytest
+from typer.testing import CliRunner
 
 from digital_twin_universe import lib
 from digital_twin_universe.capabilities.create_profile import create
@@ -15,34 +17,12 @@ from digital_twin_universe.capabilities.universe import compose, execute, launch
 from digital_twin_universe.capabilities.universe import destroy as destroy_module
 from digital_twin_universe.capabilities.universe.profile import Profile, XDtu
 from digital_twin_universe.capabilities.universe.validate import Validation
-from digital_twin_universe.schemas import (
-    BackendConfig,
-    Check,
-    DigitalTwinUniverseError,
-    LifecyclePhase,
-    ProfileReport,
-    Universe,
-)
+from digital_twin_universe.cli import app
+from digital_twin_universe.schemas import BackendConfig, Check, DigitalTwinUniverseError, ProfileReport, Universe
 
 
 def config_at(path: Path) -> BackendConfig:
     return BackendConfig(state_root=path, docker_host="unix:///owned-test.sock")
-
-
-def record(config: BackendConfig, id: str = "dtu-owned-test", phase: LifecyclePhase = "ready") -> state.UniverseRecord:
-    with runtime.configured(config):
-        value = state.UniverseRecord(
-            id=id,
-            name="owned",
-            description=None,
-            profile_path=Path("/deleted/compose.yaml"),
-            twin_machine="twin",
-            created_at=state.now(),
-            docker_host=config.docker_host,
-        )
-        value.phase = phase
-        state.write(value)
-        return value
 
 
 def universe(value: state.UniverseRecord) -> Universe:
@@ -190,7 +170,7 @@ with runtime.configured(BackendConfig(state_root=Path(sys.argv[1]))):
 
 def test_corrupt_receipt_is_discoverable_without_hiding_healthy_records(tmp_path: Path) -> None:
     config = config_at(tmp_path)
-    healthy = record(config)
+    healthy = universe_record(config=config)
     broken = tmp_path / "dtu-broken"
     broken.mkdir()
     (broken / state.RECORD_FILE).write_text('{"partial":')
@@ -200,18 +180,6 @@ def test_corrupt_receipt_is_discoverable_without_hiding_healthy_records(tmp_path
     with pytest.raises(DigitalTwinUniverseError) as caught:
         lib.status("dtu-broken", config)
     assert caught.value.code == "state-unreadable"
-
-
-def test_endpoint_is_pinned_and_explicit_retargeting_rejected(tmp_path: Path) -> None:
-    config = config_at(tmp_path)
-    value = record(config)
-    with runtime.configured(config):
-        client = compose.compose_client(value.id)
-        assert "unix:///owned-test.sock" in client.docker_cmd
-    other = config.model_copy(update={"docker_host": "unix:///another.sock"})
-    with runtime.configured(other), pytest.raises(DigitalTwinUniverseError) as caught:
-        compose.compose_client(value.id)
-    assert caught.value.code == "docker-endpoint-mismatch"
 
 
 def test_config_is_isolated_across_concurrent_threads(tmp_path: Path) -> None:
@@ -268,7 +236,7 @@ def test_lost_destroy_ack_returns_receipt_without_new_docker_effects(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config = config_at(tmp_path)
-    value = record(config)
+    value = universe_record(config=config)
     down: list[str] = []
     inventory = SimpleNamespace(list=lambda **kwargs: [])
     client = SimpleNamespace(
@@ -288,7 +256,7 @@ def test_lost_destroy_ack_returns_receipt_without_new_docker_effects(
 
 def test_stop_preserves_state_and_reports_running_residue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = config_at(tmp_path)
-    value = record(config)
+    value = universe_record(config=config)
     running = SimpleNamespace(name="owned-twin", state=SimpleNamespace(running=True, restarting=False))
     client = SimpleNamespace(
         compose=SimpleNamespace(stop=lambda **kwargs: None),
@@ -336,7 +304,7 @@ def test_random_identity_collision_never_adopts_an_existing_universe(
     launch_fixture: tuple[BackendConfig, Path, list[str]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config, profile, effects = launch_fixture
-    value = record(config)
+    value = universe_record(config=config)
     monkeypatch.setattr(state, "new_id", lambda name, operation_id: value.id)
     with pytest.raises(DigitalTwinUniverseError) as caught:
         lib.launch(profile, config=config)
@@ -371,7 +339,7 @@ def test_cleanup_receipt_prevents_relaunch_of_removed_operation(
 ) -> None:
     config = config_at(tmp_path)
     id = lib.launch_id("removed", config)
-    value = record(config, id=id)
+    value = universe_record(id, config=config)
     value.operation_id = "removed"
     with runtime.configured(config):
         state.write(value)
@@ -390,7 +358,7 @@ def test_stop_failed_inventory_retains_unknown_receipt(tmp_path: Path, monkeypat
     from python_on_whales.exceptions import DockerException
 
     config = config_at(tmp_path)
-    value = record(config)
+    value = universe_record(config=config)
 
     def unavailable(**kwargs: Any) -> list[Any]:
         raise DockerException(["docker", "container", "ls"], 1, stderr=b"offline")
@@ -415,3 +383,120 @@ def test_context_endpoint_resolution_ignores_unrelated_metadata(monkeypatch: pyt
     assert runtime.docker_host() == "unix:///selected.sock"
     assert seen[0][-1] == "selected-context"
     assert "{{json .Endpoints.docker.Host}}" in seen[0]
+
+
+@pytest.fixture
+def legacy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[BackendConfig, state.UniverseRecord, bytes]:
+    config = BackendConfig(state_root=tmp_path / "state")
+    monkeypatch.setenv("DOCKER_HOST", "unix:///ambient-peer.sock")
+    monkeypatch.setenv("DOCKER_CONTEXT", "ambient-peer")
+    record = universe_record("dtu-legacy-a1b2", config=config)
+    return config, record, (record.state_path / state.RECORD_FILE).read_bytes()
+
+
+@pytest.mark.parametrize(
+    "capability", ["status", "list_universes", "stop", "destroy", "execute", "push_files", "pull_files", "export_files"]
+)
+def test_legacy_access_never_uses_ambient_context_or_changes_receipt(
+    legacy: tuple[BackendConfig, state.UniverseRecord, bytes],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capability: str,
+) -> None:
+    config, record, before = legacy
+
+    def forbidden(**kwargs: Any) -> None:
+        pytest.fail("Legacy access must select an explicit endpoint before constructing a Docker client")
+
+    monkeypatch.setattr(compose, "DockerClient", forbidden)
+    arguments: dict[str, tuple[Any, ...]] = {
+        "status": (record.id,),
+        "list_universes": (),
+        "stop": (record.id,),
+        "destroy": (record.id,),
+        "execute": (record.id, "true"),
+        "push_files": (record.id, tmp_path / "source", "/workspace"),
+        "pull_files": (record.id, "/workspace", tmp_path / "output"),
+        "export_files": (record.id, "/workspace", tmp_path / "output.tar"),
+    }
+    with pytest.raises(DigitalTwinUniverseError) as raised:
+        getattr(lib, capability)(*arguments[capability], config=config)
+    assert raised.value.code == "docker-endpoint-required"
+    assert raised.value.universe_id == record.id
+    assert "--docker-host" in raised.value.remedy
+    assert (record.state_path / state.RECORD_FILE).read_bytes() == before
+    assert not (tmp_path / "output.tar").exists()
+    assert lib.recorded_ids(config) == [record.id]
+
+
+def test_explicit_legacy_endpoint_is_used_without_adoption(
+    legacy: tuple[BackendConfig, state.UniverseRecord, bytes], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, record, before = legacy
+    selected = config.model_copy(update={"docker_host": "unix:///original.sock"})
+    observed: list[dict[str, Any]] = []
+    monkeypatch.setattr(compose, "DockerClient", lambda **kwargs: observed.append(kwargs))
+
+    with runtime.configured(selected):
+        compose.compose_client(record.id)
+        assert state.read(record.id).docker_host is None
+    assert observed[0]["host"] == selected.docker_host
+    assert (record.state_path / state.RECORD_FILE).read_bytes() == before
+
+
+def test_pinned_record_ignores_ambient_endpoint_and_rejects_explicit_mismatch(
+    legacy: tuple[BackendConfig, state.UniverseRecord, bytes], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config, record, _ = legacy
+    record.docker_host = "unix:///original.sock"
+    observed: list[dict[str, Any]] = []
+    monkeypatch.setattr(compose, "DockerClient", lambda **kwargs: observed.append(kwargs))
+    with runtime.configured(config):
+        state.write(record)
+        compose.compose_client(record.id)
+    assert observed[0]["host"] == record.docker_host
+    with (
+        runtime.configured(config.model_copy(update={"docker_host": "unix:///peer.sock"})),
+        pytest.raises(DigitalTwinUniverseError) as raised,
+    ):
+        compose.compose_client(record.id)
+    assert raised.value.code == "docker-endpoint-mismatch"
+    assert len(observed) == 1
+
+
+@pytest.mark.parametrize(
+    ("command", "capability", "arguments"),
+    [
+        ("list", "list_universes", []),
+        ("status", "status", ["--id", "dtu-legacy-a1b2"]),
+        ("exec", "execute", ["--id", "dtu-legacy-a1b2", "--command", "true"]),
+        ("exec", "shell", ["--id", "dtu-legacy-a1b2"]),
+        ("file-push", "push_files", ["--id", "dtu-legacy-a1b2", "--source", "source", "--destination", "/workspace"]),
+        ("file-pull", "pull_files", ["--id", "dtu-legacy-a1b2", "--source", "/workspace", "--destination", "output"]),
+        (
+            "export-files",
+            "export_files",
+            ["--id", "dtu-legacy-a1b2", "--source", "/workspace", "--destination", "output.tar"],
+        ),
+        ("stop", "stop", ["--id", "dtu-legacy-a1b2"]),
+        ("destroy", "destroy", ["--id", "dtu-legacy-a1b2"]),
+    ],
+)
+@pytest.mark.parametrize("host", [None, "unix:///original.sock"])
+def test_cli_endpoint_option_uses_library_configuration(
+    monkeypatch: pytest.MonkeyPatch, command: str, capability: str, arguments: list[str], host: str | None
+) -> None:
+    observed: list[BackendConfig | None] = []
+
+    def call(*args: Any, config: BackendConfig | None = None, **kwargs: Any) -> Any:
+        observed.append(config)
+        if capability == "list_universes":
+            return []
+        if capability == "shell":
+            return 0
+        return SimpleNamespace(model_dump_json=lambda **kwargs: "{}", complete=True, exit_code=0)
+
+    monkeypatch.setattr(lib, capability, call)
+    result = CliRunner().invoke(app, [command, *arguments, *(["--docker-host", host] if host else [])])
+    assert result.exit_code == 0, result.output
+    assert observed == [BackendConfig(docker_host=host) if host is not None else None]

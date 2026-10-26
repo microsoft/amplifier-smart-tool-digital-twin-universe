@@ -123,8 +123,17 @@ def measure(record: UniverseRecord, containers: list[Container] | None = None) -
     """The universe a record describes, as Docker reports it now. `containers` skips the lookup when already listed."""
     if containers is None:
         containers = project_containers(record.id)
-    services = [_service(container) for container in containers]
-    twin = next((container for container in containers if service_name(container) == record.twin_machine), None)
+    services: list[Service] = []
+    twin_urls: list[Url] = []
+    for container in containers:
+        # Each attribute read is a fresh inspect, and a container removed since the list is no longer there to read.
+        try:
+            service = _service(container)
+            if service.name == record.twin_machine and not twin_urls:
+                twin_urls = urls(container.network_settings.ports or {}, record.urls)
+        except NoSuchContainer:
+            continue
+        services.append(service)
     return Universe(
         id=record.id,
         name=record.name,
@@ -133,7 +142,7 @@ def measure(record: UniverseRecord, containers: list[Container] | None = None) -
         twin_machine=record.twin_machine,
         state=universe_state(services, record.expected_services or [record.twin_machine]),
         services=services,
-        urls=urls(twin.network_settings.ports or {}, record.urls) if twin is not None else [],
+        urls=twin_urls,
         state_path=record.state_path,
         created_at=record.created_at,
         operation_id=record.operation_id,

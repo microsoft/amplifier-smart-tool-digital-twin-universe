@@ -6,13 +6,13 @@ from pathlib import Path
 import subprocess
 import tarfile
 
-from conftest import GIT, MakeRepository
+from fakes import GIT, MakeRepository
 import pytest
 
 from digital_twin_universe import lib
 from digital_twin_universe.schemas import BackendConfig, DigitalTwinUniverseError
 
-pytestmark = [pytest.mark.needs_docker, pytest.mark.live]
+pytestmark = [pytest.mark.needs_docker, pytest.mark.lifecycle]
 IMAGE = "docker.io/library/python:3.13-slim@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f"
 
 
@@ -52,7 +52,7 @@ def test_parallel_owned_environments_retain_work_without_replaying(
         },
         "volumes": {"workspace": {}, "artifacts": {}},
         "networks": {"isolated": {"internal": True}},
-        "x-dtu": {"twin_machine": "twin"},
+        "x-dtu": {"twin_machine": "twin", "description": "An owned twin"},
     }
     profile.write_text(json.dumps(document))
     config = BackendConfig(state_root=tmp_path / "backend")
@@ -63,6 +63,11 @@ def test_parallel_owned_environments_retain_work_without_replaying(
             first, peer = [future.result() for future in futures]
         assert [first.id, peer.id] == ids[:2]
         assert first.id != peer.id
+        assert (first.state, first.twin_machine, first.description) == ("running", "twin", "An owned twin")
+        assert [(service.name, service.health) for service in first.services] == [("twin", "healthy")]
+        assert (tmp_path / "backend" / first.id / "universe.json").is_file()
+        assert lib.status(first.id, config=config) == first
+        assert sorted(listed.id for listed in lib.list_universes(config=config)) == sorted(ids[:2])
         assert lib.launch(profile, operation_id="first", config=config).id == first.id
         assert len(lib.recorded_ids(config=config)) == 2
         lib.push_files(first.id, snapshot.path, "/artifacts/source.tar", config=config)
@@ -108,11 +113,23 @@ def test_parallel_owned_environments_retain_work_without_replaying(
             lib.launch(profile, operation_id="first", config=config)
         assert removed.value.code == "operation-removed"
         assert lib.status(peer.id, config=config).state == "running"
+        result = lib.execute(peer.id, "echo out; echo err >&2; exit 4", config=config)
+        assert (result.exit_code, result.stdout, result.stderr) == (4, "out\n", "err\n")
+        placed = lib.execute(peer.id, "pwd; id -un", workdir="/tmp", config=config)
+        assert placed.stdout == "/tmp\nroot\n"
         with pytest.raises(DigitalTwinUniverseError) as timed_out:
             lib.execute(peer.id, "sleep 30", timeout_seconds=1, config=config)
         assert timed_out.value.code == "timeout"
         assert lib.stop(peer.id, timeout_seconds=1, config=config).complete
-        assert lib.destroy(peer.id, config=config).complete
+        destroyed = lib.destroy(peer.id, config=config)
+        assert destroyed.complete
+        assert f"{peer.id}-twin-1" in destroyed.removed
+        assert f"{peer.id}_isolated" in destroyed.removed
+        assert not (tmp_path / "backend" / peer.id).exists()
+        assert lib.list_universes(config=config) == []
+        with pytest.raises(DigitalTwinUniverseError) as gone:
+            lib.execute(peer.id, "true", config=config)
+        assert gone.value.code == "universe-not-found"
         assert (source / "tracked.txt").read_text() == "dirty snapshot\n"
         assert (source / ".git").is_file()
     finally:

@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import socket
 
+from fakes import MCP_TOOLS
 from fastapi.testclient import TestClient
 import httpx
 from mcp import Client
@@ -13,8 +14,6 @@ import pytest
 from digital_twin_universe import lib
 from digital_twin_universe.capabilities.dashboard import server
 from digital_twin_universe.schemas import Dashboard, DigitalTwinUniverseError
-
-TOOLS = {"open_dashboard", "list_universes", "universe_status", "destroy_universe"}
 
 
 def _static(tmp_path: Path) -> Path:
@@ -44,7 +43,7 @@ async def test_serve_picks_a_free_port_and_serves_the_mcp_server_on_it(state_roo
         tools = await client.list_tools()
         listed = await client.call_tool("list_universes", {})
 
-    assert {tool.name for tool in tools.tools} == TOOLS
+    assert {tool.name for tool in tools.tools} == MCP_TOOLS
     assert listed.structured_content == {"result": []}
 
 
@@ -143,7 +142,7 @@ def test_the_compiled_dashboard_ships_in_the_package() -> None:
 
 
 @pytest.mark.needs_docker
-@pytest.mark.live
+@pytest.mark.lifecycle
 async def test_mcp_over_http_lists_and_destroys_a_real_universe(tmp_path: Path, state_root: Path) -> None:
     (tmp_path / "compose.yaml").write_text(
         "name: dash\nx-dtu:\n  twin_machine: box\nservices:\n  box:\n    image: alpine:3.20\n    command: sleep infinity\n"

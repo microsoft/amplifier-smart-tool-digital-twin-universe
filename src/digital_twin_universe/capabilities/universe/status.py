@@ -1,5 +1,7 @@
 """Status and list: what the tool knows about a universe, measured against Docker now."""
 
+from pathlib import Path
+
 from digital_twin_universe.capabilities.universe import state
 from digital_twin_universe.capabilities.universe.compose import measure
 from digital_twin_universe.schemas import Universe
@@ -16,3 +18,9 @@ def list_universes() -> list[Universe]:
     if not records:
         return []
     return [measure(record) for record in records]
+
+
+def list_under(directory: Path) -> list[Universe]:
+    """Universes launched from a profile under `directory`, oldest first; no other universe is measured."""
+    directory = directory.resolve()
+    return [measure(record) for record in state.read_all() if record.profile_path.resolve().is_relative_to(directory)]

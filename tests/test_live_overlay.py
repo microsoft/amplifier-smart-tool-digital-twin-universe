@@ -10,18 +10,22 @@ from contextlib import suppress
 from pathlib import Path
 import socket
 import subprocess
+from typing import NamedTuple
 
+from fakes import GIT, PROBE_FILES, create_repository
 import pytest
 
 from digital_twin_universe import lib
+from digital_twin_universe.capabilities.universe import state
 from digital_twin_universe.capabilities.universe.compose import compose_client
 from digital_twin_universe.schemas import DigitalTwinUniverseError, Universe
 
-pytestmark = [pytest.mark.needs_docker, pytest.mark.live]
+pytestmark = [pytest.mark.needs_docker, pytest.mark.overlay]
 
 SERVED_URL = "https://github.com/fake-org/probe"
 MOCKED_HOST = "api.example.com"
 MARKER = "served-from-the-universe\n"
+BRANCH_MARKER = "fixed-on-a-branch\n"
 LAUNCH_TIMEOUT = 300
 INSTALL_TIMEOUT = 300
 
@@ -135,13 +139,55 @@ def profile_directory(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def launch_universe(state_root: Path) -> Iterator[Callable[[Path], Universe]]:
-    """Launch universes and take every one of them down afterwards, whether the test passed or failed.
+    """Launch universes and take every one of them down afterwards, whether the test passed or failed."""
+    yield lambda profile: lib.launch(profile, timeout_seconds=LAUNCH_TIMEOUT)
+
+    _destroy_recorded(state_root)
+
+
+class Served(NamedTuple):
+    universe: Universe
+    profile: Path
+
+
+SHARED = pytest.mark.xdist_group("served-universe")
+
+
+@pytest.fixture(scope="module")
+def served(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Served]:
+    """One universe for every test that only reads what the plain served profile serves, launched once.
+
+    The repository is in every state those tests read at once: checked out on a branch with an uncommitted edit and
+    an untracked file, `main` still at the committed content and tagged.
+    """
+    root = tmp_path_factory.mktemp("served")
+    repository = create_repository(root / "repositories", "probe", PROBE_FILES)
+    git = [*GIT, "-C", str(repository)]
+    subprocess.run([*git, "checkout", "-q", "-b", "fix-thing"], check=True)
+    subprocess.run([*git, "tag", "v0.1.0", "main"], check=True)
+    (repository / "MARKER.txt").write_text(BRANCH_MARKER)
+    (repository / "UNCOMMITTED.txt").write_text("never-committed\n")
+    # A checkout people work in has hooks, and they call tools that exist on their machine and nowhere else.
+    hook = repository / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\nexit 1\n")
+    hook.chmod(0o755)
+    (root / "profile").mkdir()
+    profile = _profile(root / "profile", SERVED.format(repository=repository, url=SERVED_URL))
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(state, "STATE_ROOT", root / "state")
+        try:
+            yield Served(lib.launch(profile, timeout_seconds=LAUNCH_TIMEOUT), profile)
+        finally:
+            _destroy_recorded(root / "state")
+
+
+def _destroy_recorded(state_root: Path) -> None:
+    """Take down every universe recorded under `state_root`.
 
     The records are what is swept, not what was returned: a launch that fails partway leaves containers running
     on purpose, for `doctor` and `docker compose logs`, and it has already written its record by then.
     """
-    yield lambda profile: lib.launch(profile, timeout_seconds=LAUNCH_TIMEOUT)
-
     for record in sorted(state_root.iterdir()) if state_root.is_dir() else []:
         with suppress(DigitalTwinUniverseError):
             lib.destroy(record.name)
@@ -154,8 +200,8 @@ def _profile(directory: Path, compose: str, dockerfile: str = TWIN_DOCKERFILE) -
     return directory / "compose.yaml"
 
 
-def _clone(universe: Universe, url: str = SERVED_URL, into: str = "repo") -> str:
-    cloned = lib.execute(universe.id, f"git clone -q {url} {into} && cat {into}/MARKER.txt")
+def _clone(universe: Universe, into: str) -> str:
+    cloned = lib.execute(universe.id, f"git clone -q {SERVED_URL} {into} && cat {into}/MARKER.txt")
     assert cloned.exit_code == 0, cloned.stderr
     return cloned.stdout
 
@@ -163,46 +209,22 @@ def _clone(universe: Universe, url: str = SERVED_URL, into: str = "repo") -> str
 Launch = Callable[[Path], Universe]
 
 
-def test_a_served_repository_clones_inside_the_twin_from_its_github_url(
-    profile_directory: Path, launch_universe: Launch, served_repository: Path
-) -> None:
-    profile = _profile(profile_directory, SERVED.format(repository=served_repository, url=SERVED_URL))
-
-    universe = launch_universe(profile)
-
-    assert _clone(universe) == MARKER
-
-
-def test_the_working_tree_is_served_including_uncommitted_changes(
-    profile_directory: Path, launch_universe: Launch, served_repository: Path
-) -> None:
-    (served_repository / "UNCOMMITTED.txt").write_text("never-committed\n")
-    # A checkout people work in has hooks, and they call tools that exist on their machine and nowhere else.
-    hook = served_repository / ".git" / "hooks" / "pre-commit"
-    hook.write_text("#!/bin/sh\nexit 1\n")
-    hook.chmod(0o755)
-    profile = _profile(profile_directory, SERVED.format(repository=served_repository, url=SERVED_URL))
-
-    universe = launch_universe(profile)
-    cloned = lib.execute(universe.id, f"git clone -q {SERVED_URL} repo && cat repo/UNCOMMITTED.txt")
+@SHARED
+def test_the_working_tree_is_served_including_uncommitted_changes(served: Served) -> None:
+    cloned = lib.execute(
+        served.universe.id, f"git clone -q {SERVED_URL} uncommitted && cat uncommitted/UNCOMMITTED.txt"
+    )
 
     assert cloned.exit_code == 0, cloned.stderr
     assert cloned.stdout == "never-committed\n"
 
 
-def test_every_local_branch_is_served_and_the_checked_out_one_is_the_default(
-    profile_directory: Path, launch_universe: Launch, served_repository: Path
-) -> None:
+@SHARED
+def test_every_local_branch_is_served_and_the_checked_out_one_is_the_default(served: Served) -> None:
     """A developer sits on a fix branch; a consumer pins `@main`. Both have to be there, and HEAD is the fix."""
-    git = ["git", "-c", "user.email=t@dtu.invalid", "-c", "user.name=t", "-C", str(served_repository)]
-    subprocess.run([*git, "checkout", "-q", "-b", "fix-thing"], check=True)
-    (served_repository / "MARKER.txt").write_text("fixed-on-a-branch\n")
-    subprocess.run([*git, "tag", "v0.1.0", "main"], check=True)
-    profile = _profile(profile_directory, SERVED.format(repository=served_repository, url=SERVED_URL))
+    universe = served.universe
 
-    universe = launch_universe(profile)
-
-    assert _clone(universe) == "fixed-on-a-branch\n"
+    assert _clone(universe, into="default") == BRANCH_MARKER
     pinned = lib.execute(universe.id, f"git clone -q -b main {SERVED_URL} pinned && cat pinned/MARKER.txt")
     assert pinned.exit_code == 0, pinned.stderr
     assert pinned.stdout == MARKER
@@ -210,13 +232,10 @@ def test_every_local_branch_is_served_and_the_checked_out_one_is_the_default(
     assert "refs/tags/v0.1.0" in tagged.stdout
 
 
-def test_a_served_repository_answers_the_other_ways_a_repository_is_reached(
-    profile_directory: Path, launch_universe: Launch, served_repository: Path
-) -> None:
+@SHARED
+def test_a_served_repository_answers_the_other_ways_a_repository_is_reached(served: Served) -> None:
     """A repository is not only cloned: installers download archives, tools ask the API, people open pages."""
-    profile = _profile(profile_directory, SERVED.format(repository=served_repository, url=SERVED_URL))
-
-    universe = launch_universe(profile)
+    universe = served.universe
 
     archive = lib.execute(universe.id, f"curl -sSL {SERVED_URL}/archive/refs/heads/main.tar.gz | tar tz")
     assert archive.exit_code == 0, archive.stderr
@@ -226,14 +245,10 @@ def test_a_served_repository_answers_the_other_ways_a_repository_is_reached(
     assert page.stdout.strip() == "200"
 
 
-def test_a_served_repository_installs_with_uv_from_its_github_url(
-    profile_directory: Path, launch_universe: Launch, served_repository: Path
-) -> None:
-    profile = _profile(profile_directory, SERVED.format(repository=served_repository, url=SERVED_URL))
-
-    universe = launch_universe(profile)
+@SHARED
+def test_a_served_repository_installs_with_uv_from_its_github_url(served: Served) -> None:
     installed = lib.execute(
-        universe.id,
+        served.universe.id,
         f"uv tool install -q git+{SERVED_URL} && ~/.local/bin/dtu-probe",
         timeout_seconds=INSTALL_TIMEOUT,
     )
@@ -281,12 +296,9 @@ def test_a_build_that_fails_through_the_gateway_is_named_and_left_for_inspection
     assert "for inspection" in failed.value.remedy
 
 
-def test_a_near_miss_url_is_not_rewritten(
-    profile_directory: Path, launch_universe: Launch, served_repository: Path, needs_internet: None
-) -> None:
-    profile = _profile(profile_directory, SERVED.format(repository=served_repository, url=SERVED_URL))
-
-    universe = launch_universe(profile)
+@SHARED
+def test_a_near_miss_url_is_not_rewritten(served: Served, needs_internet: None) -> None:
+    universe = served.universe
 
     for reached in (SERVED_URL, f"{SERVED_URL}.git", "https://GitHub.com/Fake-Org/Probe"):
         listed = lib.execute(universe.id, f"git ls-remote {reached} HEAD")
@@ -295,7 +307,7 @@ def test_a_near_miss_url_is_not_rewritten(
     for near_miss in (f"{SERVED_URL}-extra", f"{SERVED_URL}_old", "https://github.com/other-org/probe"):
         elsewhere = lib.execute(universe.id, f"git clone -q {near_miss} near && cat near/MARKER.txt")
         assert elsewhere.exit_code != 0, f"{near_miss} should not be served"
-        assert MARKER.strip() not in elsewhere.stdout
+        assert BRANCH_MARKER.strip() not in elsewhere.stdout
 
 
 def test_a_rewrite_answers_the_real_url_with_tls_from_a_mock_service(
@@ -379,30 +391,24 @@ def test_a_profile_that_asks_for_nothing_renders_no_gateway_and_no_proxy_environ
         assert absent not in environment.stdout
 
 
-def test_the_rendered_overlay_is_a_compose_file_that_runs_by_hand(
-    profile_directory: Path, launch_universe: Launch, served_repository: Path
-) -> None:
+@SHARED
+def test_the_rendered_overlay_is_a_compose_file_that_runs_by_hand(served: Served) -> None:
     """Nothing is hidden: the profile and the overlay together are exactly what `docker compose` would run."""
-    profile = _profile(profile_directory, SERVED.format(repository=served_repository, url=SERVED_URL))
-
-    universe = launch_universe(profile)
-    overlay = universe.state_path / "dtu.yaml"
+    overlay = served.universe.state_path / "dtu.yaml"
     assert overlay.is_file()
 
-    config = compose_client(universe.id, [profile, overlay]).compose.config(return_json=True)
+    config = compose_client(served.universe.id, [served.profile, overlay]).compose.config(return_json=True)
 
     assert set(config["services"]) == {"box", "git", "gateway"}
 
 
-def test_two_universes_serving_the_same_repository_do_not_collide(
-    profile_directory: Path, launch_universe: Launch, served_repository: Path
-) -> None:
+@SHARED
+def test_two_universes_serving_the_same_repository_do_not_collide(served: Served) -> None:
     """Reserved names, networks, and volumes belong to a universe, so a second launch is not a second claim."""
-    profile = _profile(profile_directory, SERVED.format(repository=served_repository, url=SERVED_URL))
-
-    first = launch_universe(profile)
-    second = launch_universe(profile)
-
-    assert first.id != second.id
-    assert _clone(first) == MARKER
-    assert _clone(second, into="repo-two") == MARKER
+    second = lib.launch(served.profile, timeout_seconds=LAUNCH_TIMEOUT)
+    try:
+        assert served.universe.id != second.id
+        assert _clone(served.universe, into="beside-a-second") == BRANCH_MARKER
+        assert _clone(second, into="repo-two") == BRANCH_MARKER
+    finally:
+        lib.destroy(second.id)

@@ -854,7 +854,7 @@ wheels = [
 
 [[package]]
 name = "digital-twin-universe"
-version = "0.6.5"
+version = "0.6.6"
 source = { editable = "." }
 default-groups = "all"
 dependencies = [

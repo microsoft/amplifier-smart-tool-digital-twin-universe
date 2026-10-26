@@ -1,11 +1,11 @@
-"""The MCP adapter in process and over stdio: tools, the view resource, errors, and a live destroy."""
+"""The MCP adapter in process and over stdio: tools, the view resource, and errors."""
 
-from contextlib import suppress
 from importlib.metadata import version
 from pathlib import Path
 import re
 import shutil
 
+from fakes import MCP_TOOLS
 from mcp import Client, StdioServerParameters
 from mcp.types import TextContent
 import pytest
@@ -14,14 +14,12 @@ from digital_twin_universe import lib
 from digital_twin_universe.adapters import mcp as mcp_adapter
 from digital_twin_universe.schemas import DigitalTwinUniverseError
 
-TOOLS = {"open_dashboard", "list_universes", "universe_status", "destroy_universe"}
-
 
 async def test_tools_are_listed_with_their_input_schemas(state_root: Path) -> None:
     async with Client(mcp_adapter.create_server()) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
-    assert set(tools) == TOOLS
+    assert set(tools) == MCP_TOOLS
     assert tools["list_universes"].input_schema["properties"] == {}
     assert tools["universe_status"].input_schema["required"] == ["id"]
     assert tools["destroy_universe"].input_schema["required"] == ["id"]
@@ -36,7 +34,7 @@ async def test_only_open_dashboard_renders_the_view_and_only_for_the_model(state
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
     assert tools["open_dashboard"].meta == {"ui": {"resourceUri": mcp_adapter.VIEW_URI, "visibility": ["model"]}}
-    for name in TOOLS - {"open_dashboard"}:
+    for name in MCP_TOOLS - {"open_dashboard"}:
         assert not (tools[name].meta or {}).get("ui")
 
 
@@ -123,26 +121,5 @@ async def test_the_cli_serves_the_tools_over_stdio(tmp_path: Path) -> None:
         tools = await client.list_tools()
         listed = await client.call_tool("list_universes", {})
 
-    assert {tool.name for tool in tools.tools} == TOOLS
+    assert {tool.name for tool in tools.tools} == MCP_TOOLS
     assert listed.structured_content == {"result": []}
-
-
-@pytest.mark.needs_docker
-@pytest.mark.live
-async def test_a_launched_universe_is_listed_and_destroyed_through_mcp(state_root: Path) -> None:
-    universe = lib.launch("hello", timeout_seconds=120)
-    try:
-        async with Client(mcp_adapter.create_server()) as client:
-            listed = await client.call_tool("list_universes", {})
-            destroyed = await client.call_tool("destroy_universe", {"id": universe.id})
-    finally:
-        # Already gone when `destroy_universe` worked; this only cleans up after a failure before it.
-        with suppress(DigitalTwinUniverseError):
-            lib.destroy(universe.id)
-
-    assert listed.structured_content is not None
-    assert [entry["id"] for entry in listed.structured_content["result"]] == [universe.id]
-    assert not destroyed.is_error
-    assert destroyed.structured_content is not None
-    assert destroyed.structured_content["id"] == universe.id
-    assert lib.list_universes() == []

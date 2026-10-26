@@ -7,6 +7,7 @@ import subprocess
 from types import SimpleNamespace
 from typing import Any
 
+from fakes import universe_record
 import pytest
 from python_on_whales.exceptions import DockerException
 import yaml
@@ -16,7 +17,6 @@ from digital_twin_universe.capabilities.universe import overlay, state
 from digital_twin_universe.capabilities.universe import validate as validate_module
 from digital_twin_universe.capabilities.universe.compose import compose_client
 from digital_twin_universe.capabilities.universe.profile import Profile, Rewrite, XDtu
-from digital_twin_universe.capabilities.universe.state import UniverseRecord
 from digital_twin_universe.schemas import DigitalTwinUniverseError, ProfileReport, Universe
 
 PROFILE_PATH = Path("/profiles/demo/compose.yaml")
@@ -27,17 +27,6 @@ REWRITE = Rewrite(match="api.example.com", target="http://mock:8080")
 def state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(state, "STATE_ROOT", tmp_path)
     return tmp_path
-
-
-def _record() -> UniverseRecord:
-    return UniverseRecord(
-        id="dtu-demo-0000",
-        name="demo",
-        description=None,
-        profile_path=PROFILE_PATH,
-        twin_machine="app",
-        created_at=state.now(),
-    )
 
 
 def _profile(x_dtu: XDtu) -> Profile:
@@ -60,7 +49,7 @@ def _profile(x_dtu: XDtu) -> Profile:
 def test_a_build_through_the_gateway_tags_the_image_compose_would_name_and_keeps_a_profiles_own(
     state_root: Path,
 ) -> None:
-    rendered = overlay.render(_record(), _profile(XDtu(rewrites=[REWRITE])))
+    rendered = overlay.render(universe_record(), _profile(XDtu(rewrites=[REWRITE])))
 
     assert rendered.path is not None
     services = yaml.safe_load(rendered.path.read_text())["services"]
@@ -72,7 +61,7 @@ def test_a_build_through_the_gateway_tags_the_image_compose_would_name_and_keeps
 
 
 def test_without_a_gateway_nothing_is_built_through_it(state_root: Path) -> None:
-    rendered = overlay.render(_record(), _profile(XDtu()))
+    rendered = overlay.render(universe_record(), _profile(XDtu()))
 
     assert rendered.path is None
     assert rendered.gateway_builds == []
@@ -123,7 +112,7 @@ def test_bake_grants_the_host_network_and_reads_only_local_contexts(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    record = _record()
+    record = universe_record()
     record.state_path.mkdir(parents=True)
     config = {
         "name": record.id,
@@ -174,7 +163,7 @@ def test_bake_excludes_runtime_and_unrelated_secrets_and_replaces_public_file_pr
     state_root: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    record = _record()
+    record = universe_record()
     record.state_path.mkdir()
     definition = record.state_path / launch_module.BAKE_FILE
     definition.write_text("previous content")
@@ -219,9 +208,9 @@ def test_bake_rejects_inline_build_secret_before_persistence() -> None:
 
 
 @pytest.mark.needs_docker
-@pytest.mark.live
+@pytest.mark.lifecycle
 def test_bake_does_not_expand_resolved_literals_again(state_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    record = _record()
+    record = universe_record()
     record.state_path.mkdir()
     client = compose_client(record.id)
     intended = {"SIMPLE": "$DTU_BAKE_HOST_VALUE", "BRACED": "${DTU_BAKE_HOST_VALUE}", "DOUBLE": "cost$$value"}
@@ -267,7 +256,7 @@ def test_a_failed_bake_is_a_failed_build() -> None:
         stderr=b'ERROR: failed to solve: process "/bin/sh -c false" did not complete successfully: exit code: 1\n',
     )
 
-    translated = launch_module._launch_error(_record(), 12, error)
+    translated = launch_module._launch_error(universe_record(), 12, error)
 
     assert translated.code == "build-failed"
     assert "digital-twin-universe destroy --id dtu-demo-0000" in translated.remedy
@@ -283,7 +272,7 @@ def test_a_failed_bake_is_a_failed_build() -> None:
 def test_an_unrecognized_failure_names_the_command_that_failed(command: list[str], named: str) -> None:
     error = DockerException(command, 1, stderr=b"something else entirely")
 
-    translated = launch_module._launch_error(_record(), 12, error)
+    translated = launch_module._launch_error(universe_record(), 12, error)
 
     assert translated.code == "launch-failed"
     assert named in translated.message

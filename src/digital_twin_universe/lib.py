@@ -151,7 +151,7 @@ def _universes() -> create_module.Universes:
         launch=launch,
         execute=lambda id, command, timeout_seconds: execute(id, command, timeout_seconds=timeout_seconds),
         destroy=destroy,
-        list_universes=list_universes,
+        list_under=status_module.list_under,
         recorded=_recorded_ids,
         relocate=_relocate,
     )

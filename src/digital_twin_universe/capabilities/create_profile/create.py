@@ -76,7 +76,7 @@ class Universes(NamedTuple):
     launch: Callable[[Path, int], Universe]
     execute: Callable[[str, str, int], ExecResult]
     destroy: Callable[[str], Destroyed]
-    list_universes: Callable[[], list[Universe]]
+    list_under: Callable[[Path], list[Universe]]
     recorded: Callable[[], list[str]]
     relocate: Callable[[str, Path], None]
 
@@ -302,13 +302,16 @@ class Run:
             return None
 
     def agent_universes(self) -> list[Universe]:
-        """Universes launched from the draft that the tool did not launch itself: the agent's, still up."""
-        draft = self.draft.resolve()
-        return [
-            universe
-            for universe in self.universes.list_universes()
-            if universe.id not in self.tool_ids and Path(universe.profile_path).resolve().is_relative_to(draft)
-        ]
+        """Universes launched from the draft that the tool did not launch itself: the agent's, still up.
+
+        A failure to measure them is a note, since the verified profile is not worth losing over it.
+        """
+        try:
+            universes = self.universes.list_under(self.draft)
+        except DigitalTwinUniverseError as error:
+            self.notes.append(f"The universes launched from the draft could not be listed ({error}).")
+            return []
+        return [universe for universe in universes if universe.id not in self.tool_ids]
 
 
 def create_profile(
@@ -538,6 +541,7 @@ def _finish(run: Run, path: Path) -> CreatedProfile:
         result.universe_id = sorted(run.incomplete_cleanup)[0]
         result.urls = []
         result.notes.append(f"Tool universe ids with incomplete cleanup: {', '.join(sorted(run.incomplete_cleanup))}.")
+    leftovers = run.agent_universes()
     result.notes.extend(run.notes)
     run.notes.clear()
     result.notes.extend(run.reference.notes)
@@ -555,7 +559,6 @@ def _finish(run: Run, path: Path) -> CreatedProfile:
         result.next = f"exec into it with `digital-twin-universe exec --id {run.up.id}`; destroy it with `digital-twin-universe destroy --id {run.up.id}`"
     elif run.up is None and result.outcome in ("created", "validated"):
         result.next = f"launch it with `digital-twin-universe launch --profile {run.name}`"
-    leftovers = run.agent_universes()
     result.notes.extend(
         f"Universe {universe.id} was launched by the agent from the draft and left {universe.state}; "
         "the tool never destroys what it did not launch."

@@ -9,3 +9,23 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    groups:
+      uv:
+        patterns: ["*"]
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/dashboard"
+    groups:
+      dashboard:
+        patterns: ["*"]
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7

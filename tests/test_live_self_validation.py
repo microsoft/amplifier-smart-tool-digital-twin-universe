@@ -13,7 +13,7 @@ import pytest
 from digital_twin_universe import lib
 from digital_twin_universe.capabilities.universe.profile import PROFILE_DIRECTORY
 
-pytestmark = [pytest.mark.needs_docker, pytest.mark.live]
+pytestmark = [pytest.mark.needs_docker, pytest.mark.self_validation]
 
 REPOSITORY = Path(__file__).parents[1]
 PROFILE = REPOSITORY / PROFILE_DIRECTORY / "self-validation"

@@ -10,9 +10,9 @@ import pytest
 
 from digital_twin_universe import lib
 from digital_twin_universe.capabilities.universe.profile import EXAMPLES_DIRECTORY
-from digital_twin_universe.schemas import DigitalTwinUniverseError, Url
+from digital_twin_universe.schemas import DigitalTwinUniverseError
 
-pytestmark = [pytest.mark.needs_docker, pytest.mark.live]
+pytestmark = [pytest.mark.needs_docker, pytest.mark.lifecycle]
 
 AMPLIFIER_CORE_VERSION = "99.0.0"
 PROVIDER_MARKER = "DTU_PROVIDER_ANTHROPIC_TEST_MARKER"
@@ -33,85 +33,6 @@ services:
       test: [CMD, "true"]
       interval: 1s
 """
-
-
-SERVING_PROFILE = """\
-name: live-urls
-x-dtu:
-  twin_machine: box
-  urls:
-    - {port: 80, path: /api/health, label: Health}
-    - {port: 80, host: site.localhost, label: Home}
-services:
-  box:
-    image: busybox:1.37
-    command: sh -c "mkdir -p /srv/api && echo ok > /srv/api/health && echo home > /srv/index.html && exec httpd -f -p 80 -h /srv"
-    ports: ["{port}:80"]
-    healthcheck:
-      test: [CMD, wget, -q, -O-, "http://localhost/api/health"]
-      interval: 1s
-"""
-
-
-def test_launch_exec_destroy_round_trip(tmp_path: Path, state_root: Path, free_port: int) -> None:
-    profile = tmp_path / "compose.yaml"
-    profile.write_text(ALPINE_PROFILE.format(port=free_port))
-
-    universe = lib.launch(profile, timeout_seconds=120)
-    try:
-        assert universe.id.startswith("dtu-live-")
-        assert universe.state == "running"
-        assert universe.twin_machine == "box"
-        assert universe.description == "A twin that does nothing"
-        assert [service.name for service in universe.services] == ["box"]
-        assert universe.services[0].health == "healthy"
-        assert [url.url for url in universe.urls] == [f"http://localhost:{free_port}/"]
-        assert (state_root / universe.id / "universe.json").is_file()
-
-        assert lib.status(universe.id) == universe
-        assert [listed.id for listed in lib.list_universes()] == [universe.id]
-
-        result = lib.execute(universe.id, "echo out; echo err >&2; exit 4")
-        assert (result.exit_code, result.stdout, result.stderr) == (4, "out\n", "err\n")
-
-        placed = lib.execute(universe.id, "pwd; id -un", workdir="/tmp")
-        assert placed.stdout == "/tmp\nroot\n"
-
-        with pytest.raises(DigitalTwinUniverseError) as raised:
-            lib.execute(universe.id, "sleep 30", timeout_seconds=1)
-        assert raised.value.code == "timeout"
-    finally:
-        destroyed = lib.destroy(universe.id)
-
-    assert f"{universe.id}-box-1" in destroyed.removed
-    assert f"{universe.id}_default" in destroyed.removed
-    assert not (state_root / universe.id).exists()
-    assert lib.list_universes() == []
-    with pytest.raises(DigitalTwinUniverseError) as raised:
-        lib.execute(universe.id, "true")
-    assert raised.value.code == "universe-not-found"
-
-
-def test_the_urls_the_profile_describes_are_the_ones_the_host_can_open(
-    tmp_path: Path, state_root: Path, free_port: int
-) -> None:
-    profile = tmp_path / "compose.yaml"
-    profile.write_text(SERVING_PROFILE.replace("{port}", str(free_port)))
-
-    universe = lib.launch(profile, timeout_seconds=120)
-    try:
-        health, home = universe.urls
-        assert health == Url(
-            url=f"http://localhost:{free_port}/api/health", port=free_port, path="/api/health", label="Health"
-        )
-        assert home == Url(url=f"http://site.localhost:{free_port}/", port=free_port, path="/", label="Home")
-        assert lib.status(universe.id).urls == universe.urls
-        assert urlopen(health.url, timeout=5).read() == b"ok\n"
-        # Browsers and curl resolve `site.localhost` themselves; the system resolver this test would use may not,
-        # which is the documented caveat, so the name is checked as reported and the page is fetched by address.
-        assert urlopen(home.url.replace("site.localhost", "127.0.0.1"), timeout=5).read() == b"home\n"
-    finally:
-        lib.destroy(universe.id)
 
 
 def test_pushed_files_land_by_docker_cp_rules_owned_by_the_twins_user_and_pull_back(
@@ -183,6 +104,7 @@ def test_the_shipped_web_site_example_reports_named_urls_the_host_can_open(
             ("Home", f"http://web-site.localhost:{free_port}/"),
             ("Docs", f"http://web-site.localhost:{free_port}/docs/"),
         ]
+        assert lib.status(universe.id).urls == universe.urls
         assert b"<h1>Docs</h1>" in urlopen(f"http://127.0.0.1:{free_port}/docs/", timeout=5).read()
         assert lib.execute(universe.id, "id -un").stdout == "user\n"
     finally:
