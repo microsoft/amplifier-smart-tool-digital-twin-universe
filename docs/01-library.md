@@ -195,7 +195,7 @@ examples/
   hello/                  The smallest universe: an Alpine twin with nothing installed
   copilot-cli/            GitHub Copilot CLI installed as a user would, signed in with the host's GH_TOKEN
   served-repository/      A local git repository cloned in the twin from the URL it stands in for
-  amplifier-modules-dtu/  Shows how to install Amplifier modules from the local universe. Shows 
+  amplifier-modules-dtu/  Amplifier installed from GitHub, with local checkouts of its repositories served in their place
   web-site/               A static site opened from the host's browser at the URLs `x-dtu.urls` names
 ```
 
