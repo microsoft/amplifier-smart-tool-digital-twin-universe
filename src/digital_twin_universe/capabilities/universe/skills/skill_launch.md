@@ -7,6 +7,11 @@ Use it whenever you need the twin running. Each call launches a new universe wit
 from the same profile; reuse a running one from `list` instead of launching twice. The universe
 keeps running after this command exits, until `destroy`. Destroy what you launch.
 
+The commands below are examples. `hello`, `copilot-cli`, and `amplifier-modules-dtu` are profiles
+shipped with the tool, in `examples/` under the skill directory, so those names launch from any
+working directory once their variables are set. `my-app` and the `~/code/...` paths stand for your
+own profile and checkouts.
+
 ```bash
 digital-twin-universe launch --profile hello
 
@@ -18,6 +23,10 @@ digital-twin-universe launch \
 # a profile that reads a host variable at launch
 export GH_TOKEN="$(gh auth token)"
 digital-twin-universe launch --profile copilot-cli
+
+# Amplifier from GitHub, with local checkouts served in place of its repositories; the Rust build is long
+export DTU_AMPLIFIER_CORE=~/code/amplifier-core DTU_PROVIDER_ANTHROPIC=~/code/amplifier-module-provider-anthropic
+digital-twin-universe launch --profile amplifier-modules-dtu --timeout-seconds 1200
 ```
 
 ```python

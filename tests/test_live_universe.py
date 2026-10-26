@@ -2,6 +2,8 @@
 
 import os
 from pathlib import Path
+import re
+import subprocess
 from urllib.request import urlopen
 
 import pytest
@@ -11,6 +13,11 @@ from digital_twin_universe.capabilities.universe.profile import EXAMPLES_DIRECTO
 from digital_twin_universe.schemas import DigitalTwinUniverseError, Url
 
 pytestmark = [pytest.mark.needs_docker, pytest.mark.live]
+
+AMPLIFIER_CORE_VERSION = "99.0.0"
+PROVIDER_MARKER = "DTU_PROVIDER_ANTHROPIC_TEST_MARKER"
+# The Rust build of amplifier-core alone takes about three minutes.
+AMPLIFIER_LAUNCH_TIMEOUT = 1200
 
 ALPINE_PROFILE = """\
 name: live
@@ -194,3 +201,61 @@ def test_the_shipped_copilot_example_launches_by_name(state_root: Path) -> None:
         assert result.stdout.startswith("user\nGitHub Copilot CLI")
     finally:
         lib.destroy(universe.id)
+
+
+@pytest.mark.model
+@pytest.mark.skipif(
+    not os.environ.get("ANTHROPIC_API_KEY"), reason="needs ANTHROPIC_API_KEY for the amplifier-modules-dtu example"
+)
+def test_the_shipped_amplifier_example_runs_the_local_core_and_provider(
+    tmp_path: Path, state_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    core = _shallow_clone("https://github.com/microsoft/amplifier-core", tmp_path / "amplifier-core")
+    provider = _shallow_clone(
+        "https://github.com/microsoft/amplifier-module-provider-anthropic",
+        tmp_path / "amplifier-module-provider-anthropic",
+    )
+    # Above any release, so uv prefers the local wheel to PyPI.
+    for manifest in ("pyproject.toml", "bindings/python/Cargo.toml", "crates/amplifier-core/Cargo.toml"):
+        _replace_first(core / manifest, r'(?m)^version = "[^"]+"$', f'version = "{AMPLIFIER_CORE_VERSION}"')
+    _replace_first(
+        core / "python" / "amplifier_core" / "__init__.py",
+        r'(?m)^__version__ = "[^"]+"$',
+        f'__version__ = "{AMPLIFIER_CORE_VERSION}"',
+    )
+    _replace_first(
+        provider / "amplifier_module_provider_anthropic" / "__init__.py",
+        r"(?m)^    if not api_key:$",
+        f'    logger.warning("{PROVIDER_MARKER}")\n    if not api_key:',
+    )
+    monkeypatch.setenv("DTU_AMPLIFIER_CORE", str(core))
+    monkeypatch.setenv("DTU_PROVIDER_ANTHROPIC", str(provider))
+
+    universe = lib.launch("amplifier-modules-dtu", timeout_seconds=AMPLIFIER_LAUNCH_TIMEOUT)
+    try:
+        assert universe.state == "running"
+
+        engine = lib.execute(
+            universe.id,
+            "~/.local/share/uv/tools/amplifier/bin/python -c "
+            "'import amplifier_core._engine as engine; print(engine.__version__)'",
+        )
+        assert (engine.exit_code, engine.stdout) == (0, f"{AMPLIFIER_CORE_VERSION}\n")
+
+        run = lib.execute(universe.id, 'amplifier run "Say exactly: dtu-ready"', timeout_seconds=600)
+        assert run.exit_code == 0, run.stderr
+        assert "dtu-ready" in run.stdout
+        assert PROVIDER_MARKER in run.stdout + run.stderr
+    finally:
+        lib.destroy(universe.id)
+
+
+def _shallow_clone(url: str, into: Path) -> Path:
+    subprocess.run(["git", "clone", "-q", "--depth", "1", url, str(into)], check=True)
+    return into
+
+
+def _replace_first(path: Path, pattern: str, replacement: str) -> None:
+    text, count = re.subn(pattern, replacement, path.read_text(), count=1)
+    assert count == 1, f"{pattern!r} not found in {path}"
+    path.write_text(text)

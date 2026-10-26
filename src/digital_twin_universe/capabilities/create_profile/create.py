@@ -53,8 +53,8 @@ from digital_twin_universe.schemas import (
     Universe,
 )
 
-AUTHORING_PROMPT = Path(__file__).with_name("authoring.md")
-CLEANUP_PROMPT = Path(__file__).with_name("cleanup.md")
+AUTHORING_PROMPT = Path(__file__).parent / "prompts" / "authoring.md"
+CLEANUP_PROMPT = Path(__file__).parent / "prompts" / "cleanup.md"
 COMPOSE_FILE = "compose.yaml"
 DRAFT_SUFFIX = ".draft"
 MAX_CORRECTIONS = 1

@@ -60,13 +60,7 @@ requires:
 ---
 
 Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed.
-
-**The library is the tool.** `digital_twin_universe.lib` holds every capability. The CLI is a thin
-wrapper over it, so anything you can do from the shell you can also do from Python.
-
-Profiles are trusted Compose inputs, not an untrusted-code sandbox. The gateway filters proxy traffic;
-clients can bypass it. Explicit host mounts, privileged services, and builds retain their Compose powers.
-Runtime environment is excluded from saved build definitions, but explicit build arguments are saved inputs.
+**The library is the tool.** `digital_twin_universe.lib` holds every capability. The CLI is a thin wrapper over it, so anything you can do from the shell you can also do from Python.
 
 ## When to reach for it
 
@@ -122,7 +116,8 @@ writing a profile of your own; `docs/03-profile.md` in the repository is the sch
 `examples/hello/` is the smallest universe, an Alpine twin with nothing installed: launch it to
 try `exec` on a machine you have not used the tool on before. `examples/web-site/` is a site
 opened from the host's browser at the URLs its `x-dtu.urls` names; read it before writing a
-profile for a web app.
+profile for a web app. `examples/amplifier-modules-dtu/` installs Amplifier from GitHub with
+local checkouts of amplifier-core and provider-anthropic served in their place.
 
 By default each universe has a record under `~/.digital-twin-universe/universes/<id>/`.
 Library callers can set a private state root and pin the Docker endpoint. Keep that ownership record until
@@ -217,6 +212,24 @@ and names what to install or configure; it never falls back to a deterministic a
 
 Runs on Linux, macOS, and Windows. The twin is a Linux container everywhere by default; on
 Windows a profile can opt into Windows containers.
+
+## Security Considerations
+
+- A profile is like a script you run on your machine. The tool does not protect you from a bad profile. Run only profiles that you or people you trust wrote.
+- The allow list blocks only programs that obey the proxy settings (HTTP_PROXY, HTTPS_PROXY). A program that ignores those settings can go to the internet directly. So allow is not a firewall.
+- Never pass a secret as a build arg. A profile with `repositories`, `rewrites`, or `allow` has its images built from `~/.digital-twin-universe/universes/<id>/bake.yaml`, which stays until `destroy`. `build.args` are written to it with their values filled in, so a `${GH_TOKEN}` arg puts the token in the file. `environment:` values are never written to it, so pass secrets the program needs at run time there. `build.secrets` are written only as the variable or file to read, so use them for a secret the build needs:
+
+  ```yaml
+  build:
+    secrets: [gh_token]
+  secrets:
+    gh_token:
+      environment: GH_TOKEN
+  ```
+
+  ```dockerfile
+  RUN --mount=type=secret,id=gh_token,env=GH_TOKEN some-command
+  ```
 
 ## Straight and smart paths
 

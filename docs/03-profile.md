@@ -25,7 +25,7 @@ A profile usually belongs to the project it tests, under `.agents/digital-twin-u
 
 `create-profile` works in `<name>.draft/` beside the final directory, at the same depth, so `repositories[].path` and `build: .` resolve identically before and after the rename to `<name>/` that a passing verification earns. A failed run leaves the draft in place and says so; a person can fix it by hand, and `launch --profile .agents/digital-twin-universe/<name>.draft` runs it by path.
 
-A name not found in the project is looked for under the examples shipped inside the package, `examples/<name>/` beside the tool's own files. `launch --profile copilot-cli` works on a fresh install for that reason, and `launch --profile hello` is the smallest universe there is.
+A name not found in the project is looked for under the examples shipped inside the package, `examples/<name>/` beside the tool's own files. `launch --profile copilot-cli` works on a fresh install for that reason, and `launch --profile hello` is the smallest universe there is. `launch --profile amplifier-modules-dtu` installs Amplifier from GitHub with local checkouts of its repositories served in their place.
 
 An environment defined anywhere else launches by path. `launch --profile <path>` takes:
 

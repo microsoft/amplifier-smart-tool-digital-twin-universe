@@ -29,7 +29,7 @@ from digital_twin_universe.schemas import (
 )
 
 PLAN_PATH = Path.home() / ".digital-twin-universe" / "install" / "plan.json"
-PROMPT_PATH = Path(__file__).with_name("plan.md")
+PROMPT_PATH = Path(__file__).parent / "prompts" / "plan.md"
 MAX_PLAN_RETRIES = 2
 NEVER_UNATTENDED = re.compile(r"get\.docker\.com|\b(newgrp|reboot|shutdown)\b")
 SUDO_WITHOUT_N = re.compile(r"\bsudo\b(?!\s+-n\b)")
