@@ -1,5 +1,19 @@
 # Digital Twin Universe Smart Tool
 
+## Quickstart
+
+Ask your agent:
+
+> Install https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe and its agent skill.
+
+Then ask it to test an install before you publish:
+
+> Run <my app> in a Digital Twin Universe. Install it from this checkout as if it were published on GitHub, run its quickstart, and show me any failures.
+
+For manual setup, see [Installation](#installation).
+
+## About
+
 Stands up isolated, realistic environments from a profile using Docker Compose called a "Digital Twin Universe", or DTU. Why would you want to use this?
 - It gives your agents the optimized tools to test software in isolated and repeatable ways. Agents have to prove what they built or changed within a clean environment - the DTU.
 - Parallelism. It allows you to work on and try things completely in parallel and isolated. For example, you can run many evaluations at once, each trying something different.
@@ -20,7 +34,7 @@ Prerequisites:
   - `claude` agent provider: `ANTHROPIC_API_KEY`, or any of its other supported modes of [authentication](https://code.claude.com/docs/en/agent-sdk/quickstart).
 - (Optional) Install the Smart Tools skill so your agent knows about Smart Tools: `npx skills add microsoft/amplifier-smart-tools`
 
-To get started:
+To install manually:
 
 ```bash
 # Install the Agent Skill so your agent knows about it.
