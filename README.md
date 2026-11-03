@@ -56,13 +56,6 @@ does not install Docker or enable a host application's test backend. An embeddin
 chooses the Docker endpoint, private state location, approved profiles, and access to source. Docker setup
 changes require the separate explicit `install --yes` operation.
 
-To update, find the newest release tag, then run the commands above again with it, keeping the extras
-`uv tool list --show-extras` reports. An install stays on its tag, so `uv tool upgrade` does not move it.
-
-```bash
-git ls-remote --tags --refs --sort=-v:refname https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe "v*" | head -1
-```
-
 To uninstall:
 
 ```bash
