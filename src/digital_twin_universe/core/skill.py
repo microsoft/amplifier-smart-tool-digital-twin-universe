@@ -132,6 +132,7 @@ SKILL_RESOURCES = (
     "examples/served-repository/compose.yaml",
     "examples/amplifier-modules-dtu/compose.yaml",
     "examples/web-site/compose.yaml",
+    "examples/web-tester/compose.yaml",
 )
 
 

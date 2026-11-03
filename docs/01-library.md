@@ -197,6 +197,7 @@ examples/
   served-repository/      A local git repository cloned in the twin from the URL it stands in for
   amplifier-modules-dtu/  Amplifier installed from GitHub, with local checkouts of its repositories served in their place
   web-site/               A static site opened from the host's browser at the URLs `x-dtu.urls` names
+  web-tester/             A headless browser an agent scripts and screenshots, beside a web app it opens over HTTPS
 ```
 
 ## Validate profile

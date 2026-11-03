@@ -152,6 +152,9 @@ Complete profiles known to launch, under `{examples}`. Read the one closest to t
   theirs, and a Rust build stage whose wheel uv finds through `UV_FIND_LINKS`. The shape for a multi-repo ecosystem.
 - `web-site/` -- a server on a published port with `x-dtu.urls` naming what the host's browser opens, with a
   `:-` default for the host port. The shape for any web app.
+- `web-tester/` -- a `browser` service with agent-browser and Chromium beside the app, reaching it through a
+  `rewrites` entry over HTTPS, with the universe's authority handed to Chromium through `AGENT_BROWSER_CA_CERT`.
+  Copy that service when the request is to drive or screenshot a web UI from inside the universe.
 
 ## What `validate-profile` reports
 

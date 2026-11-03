@@ -1,0 +1,46 @@
+# A headless browser beside the web app it tests, so an agent drives the app's real UI from inside the universe and
+# screenshots it. The browser is agent-browser, a CLI over Chromium. `app` stands in for the software under test:
+# copy the `browser` service and its Dockerfile into the app's own profile, and point a rewrite at the app.
+#
+#   digital-twin-universe launch --profile web-tester
+#   digital-twin-universe exec --id <id> --command "agent-browser open https://app.example.com"
+#   digital-twin-universe exec --id <id> --command "agent-browser screenshot /home/user/home.png"
+#   digital-twin-universe file-pull --id <id> --source /home/user/home.png --destination home.png
+#   digital-twin-universe exec --id <id> --command "agent-browser skills get core"
+name: web-tester
+
+x-dtu:
+  description: A headless browser (agent-browser and Chromium) beside a web app it opens over HTTPS
+  twin_machine: browser
+  rewrites:
+    # The browser opens the app at the URL a user would, TLS included, and the gateway answers with `app`.
+    - match: app.example.com
+      target: http://app:8000
+
+services:
+  browser:
+    build: .
+    environment:
+      # Chromium on Linux trusts its own NSS store, not the system's, so the universe's authority is handed to it.
+      # agent-browser imports it into a fresh store on each browser launch, and HTTPS checks stay on.
+      AGENT_BROWSER_CA_CERT: /etc/dtu/ca.crt
+    # Chromium's renderers outgrow Docker's default 64 MB /dev/shm.
+    shm_size: 1gb
+    # Keeps the twin up for exec.
+    command: sleep infinity
+    healthcheck:
+      test: [CMD, agent-browser, --version]
+      interval: 2s
+
+  app:
+    image: python:3.12-alpine
+    command:
+      - sh
+      - -c
+      - mkdir -p /srv && cd /srv
+        && printf '<!doctype html><title>Example app</title><h1>Example app</h1>' > index.html
+        && exec python -m http.server 8000
+    # http.server binds IPv4 only, and Alpine resolves `localhost` to ::1 first, so probe the address.
+    healthcheck:
+      test: [CMD, wget, -q, -O-, "http://127.0.0.1:8000/"]
+      interval: 2s
