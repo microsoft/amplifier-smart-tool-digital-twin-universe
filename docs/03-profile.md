@@ -203,6 +203,8 @@ The overlay, rendered into the universe's state directory and run as a second `-
 
 The mounted authority is the public roots with the universe's own appended, because every variable that names a bundle replaces the trust store rather than adding to it. A tunnelled host and a rewritten host both verify.
 
+Chromium and Chrome on Linux read neither these variables nor the system store, only their own NSS store, so a browser in a twin needs the authority handed to it. `examples/web-tester` does it through agent-browser's `AGENT_BROWSER_CA_CERT`; a browser driven some other way imports `/etc/dtu/ca.crt` with `certutil`.
+
 Saved `bake.yaml` contains only selected build definitions and referenced build-secret file/environment names,
 with mode 0600. Runtime environment and unrelated service settings are excluded. Explicit build arguments
 are still saved build inputs; use file/environment build secrets for sensitive build values. Inline build-secret

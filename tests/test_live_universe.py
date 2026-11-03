@@ -111,6 +111,34 @@ def test_the_shipped_web_site_example_reports_named_urls_the_host_can_open(
         lib.destroy(universe.id)
 
 
+def test_the_shipped_web_tester_example_opens_the_app_over_https_with_tls_checks_on(
+    tmp_path: Path, state_root: Path
+) -> None:
+    universe = lib.launch("web-tester", timeout_seconds=900)
+    try:
+        opened = lib.execute(
+            universe.id,
+            "agent-browser open https://app.example.com && agent-browser get title"
+            " && agent-browser screenshot /home/user/home.png",
+            timeout_seconds=120,
+        )
+        assert opened.exit_code == 0, opened.stderr
+        assert "Example app\n" in opened.stdout
+
+        untrusted = lib.execute(
+            universe.id,
+            "env -u AGENT_BROWSER_CA_CERT agent-browser --session untrusted open https://app.example.com",
+            timeout_seconds=120,
+        )
+        assert "ERR_CERT_AUTHORITY_INVALID" in untrusted.stderr
+
+        assert "name: core" in lib.execute(universe.id, "agent-browser skills get core").stdout
+        lib.pull_files(universe.id, "/home/user/home.png", tmp_path)
+        assert (tmp_path / "home.png").read_bytes().startswith(b"\x89PNG")
+    finally:
+        lib.destroy(universe.id)
+
+
 @pytest.mark.skipif(not os.environ.get("GH_TOKEN"), reason="needs GH_TOKEN for the copilot-cli example")
 def test_the_shipped_copilot_example_launches_by_name(state_root: Path) -> None:
     universe = lib.launch("copilot-cli", timeout_seconds=600)

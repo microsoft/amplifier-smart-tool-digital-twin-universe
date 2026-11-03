@@ -1,7 +1,7 @@
 ---
 smart_tool_format: 1
 name: digital-twin-universe
-version: 0.6.7
+version: 0.6.8
 description: >-
   Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed
 use_cases:
@@ -116,7 +116,9 @@ writing a profile of your own; `docs/03-profile.md` in the repository is the sch
 `examples/hello/` is the smallest universe, an Alpine twin with nothing installed: launch it to
 try `exec` on a machine you have not used the tool on before. `examples/web-site/` is a site
 opened from the host's browser at the URLs its `x-dtu.urls` names; read it before writing a
-profile for a web app. `examples/amplifier-modules-dtu/` installs Amplifier from GitHub with
+profile for a web app. `examples/web-tester/` puts a headless browser an agent scripts and
+screenshots beside a web app it opens over HTTPS; copy its `browser` service to test a web app
+from inside the universe. `examples/amplifier-modules-dtu/` installs Amplifier from GitHub with
 local checkouts of amplifier-core and provider-anthropic served in their place.
 
 By default each universe has a record under `~/.digital-twin-universe/universes/<id>/`.
