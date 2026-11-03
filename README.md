@@ -29,7 +29,7 @@ Prerequisites:
 - [Docker](https://docs.docker.com/get-started/get-docker/)
 - For the model-backed capabilities, one of:
   - `copilot` agent provider: [GitHub CLI](https://cli.github.com/) signed in to an account with a [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites).
-  - `amplifier-agent` agent provider: the model provider's credentials, for instance `OPENAI_API_KEY` for the default `openai/...` model. See [providers](https://github.com/microsoft/amplifier-agent/blob/v0.22.0/docs/providers.md).
+  - `amplifier-agent` agent provider: the model provider's credentials, for instance `OPENAI_API_KEY` for the default `openai/...` model. See [providers](https://github.com/microsoft/amplifier-agent/blob/v0.25.0/docs/providers.md).
   - `codex` agent provider: the [Codex CLI](https://github.com/openai/codex) signed in with ChatGPT or an API key. See [authentication](https://developers.openai.com/codex/auth).
   - `claude` agent provider: `ANTHROPIC_API_KEY`, or any of its other supported modes of [authentication](https://code.claude.com/docs/en/agent-sdk/quickstart).
 - (Optional) Install the Smart Tools skill so your agent knows about Smart Tools: `npx skills add microsoft/amplifier-smart-tools`
@@ -38,9 +38,9 @@ To install manually:
 
 ```bash
 # Install the Agent Skill so your agent knows about it.
-npx skills add microsoft/amplifier-smart-tool-digital-twin-universe
+npx skills add microsoft/amplifier-smart-tool-digital-twin-universe#v0.6.9
 # Install the tool, choosing the provider(s) you want
-uv tool install "digital-twin-universe[all | copilot | amplifier-agent | codex | claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+uv tool install "digital-twin-universe[all | copilot | amplifier-agent | codex | claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.9"
 # Check setup; if it needs fixing, this plans the fix with the agent provider. Apply it with --yes.
 digital-twin-universe install
 ```
@@ -48,7 +48,7 @@ digital-twin-universe install
 To use it as a library:
 
 ```bash
-uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.9"
 ```
 
 Deterministic operations need no model provider; omit extras for a core-only install. Installing the package
@@ -56,11 +56,11 @@ does not install Docker or enable a host application's test backend. An embeddin
 chooses the Docker endpoint, private state location, approved profiles, and access to source. Docker setup
 changes require the separate explicit `install --yes` operation.
 
-To update:
+To update, find the newest release tag, then run the commands above again with it, keeping the extras
+`uv tool list --show-extras` reports. An install stays on its tag, so `uv tool upgrade` does not move it.
 
 ```bash
-npx skills update digital-twin-universe   # add -g for global installs
-uv tool upgrade digital-twin-universe
+git ls-remote --tags --refs --sort=-v:refname https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe "v*" | head -1
 ```
 
 To uninstall:

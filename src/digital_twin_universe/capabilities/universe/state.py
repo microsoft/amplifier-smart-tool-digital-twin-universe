@@ -1,6 +1,6 @@
 """Atomic management records and process-safe lifecycle ownership."""
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 import hashlib
@@ -157,14 +157,14 @@ def _not_found_remedy(id: str) -> str:
 
 
 @contextmanager
-def lifecycle_lock(id: str) -> Iterator[None]:
+def lifecycle_lock(id: str) -> Generator[None]:
     checked_id(id)
     with path_lock(root() / ".locks" / f"{id}.lock", id):
         yield
 
 
 @contextmanager
-def path_lock(path: Path, identity: str) -> Iterator[None]:
+def path_lock(path: Path, identity: str) -> Generator[None]:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     try:
         with FileLock(path, timeout=0):

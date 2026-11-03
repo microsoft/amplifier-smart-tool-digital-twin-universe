@@ -1,6 +1,7 @@
 """Picks the agent provider and the model with the installed SDKs faked, so it runs on a bare install."""
 
 from importlib.machinery import ModuleSpec
+from importlib.metadata import version
 
 import click
 import pytest
@@ -13,7 +14,9 @@ from digital_twin_universe.intelligence.interface import resolve_agent_provider,
 from digital_twin_universe.intelligence.schemas import AgentRequest, AgentResult
 from digital_twin_universe.schemas import DEFAULT_INTELLIGENCE_MODELS, AgentProvider, DigitalTwinUniverseError
 
-REPOSITORY = "git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe"
+REPOSITORY = (
+    f"git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v{version('digital-twin-universe')}"
+)
 
 runner = CliRunner()
 

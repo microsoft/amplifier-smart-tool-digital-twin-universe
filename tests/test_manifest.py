@@ -1,7 +1,9 @@
 from importlib.metadata import version
 import json
 from pathlib import Path
+import re
 
+import pytest
 import yaml
 
 from digital_twin_universe.core.manifest import MANIFEST_PATH
@@ -24,3 +26,13 @@ def test_skill_carries_the_package_version() -> None:
     _, frontmatter, _ = SKILL_PATH.read_text(encoding="utf-8").split("---", 2)
 
     assert yaml.safe_load(frontmatter)["metadata"]["version"] == version("digital-twin-universe")
+
+
+@pytest.mark.parametrize("document", [DISTRIBUTION_ROOT / "README.md", SKILL_PATH, MANIFEST_PATH])
+def test_install_commands_pin_the_package_version(document: Path) -> None:
+    pins = re.findall(
+        r"amplifier-smart-tool-digital-twin-universe[@#]v(\d+(?:\.\w+)*)", document.read_text(encoding="utf-8")
+    )
+
+    assert pins
+    assert set(pins) == {version("digital-twin-universe")}

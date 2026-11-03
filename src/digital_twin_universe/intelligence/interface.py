@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 from typing import Protocol
 
-from digital_twin_universe.core.skill import DISTRIBUTION, repository_url
+from digital_twin_universe.core.skill import DISTRIBUTION, repository_url, version
 from digital_twin_universe.intelligence.schemas import AgentRequest, AgentResult
 from digital_twin_universe.schemas import AGENT_PROVIDERS, AgentProvider, DigitalTwinUniverseError
 
@@ -122,4 +122,4 @@ def state_directory(agent_provider: AgentProvider) -> Path:
 
 def _install_source(extra: str) -> str:
     url = repository_url()
-    return f'"{DISTRIBUTION}[{extra}] @ git+{url}"' if url else f'"{DISTRIBUTION}[{extra}]"'
+    return f'"{DISTRIBUTION}[{extra}] @ git+{url}@v{version()}"' if url else f'"{DISTRIBUTION}[{extra}]"'

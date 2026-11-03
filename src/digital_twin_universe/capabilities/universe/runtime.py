@@ -1,6 +1,6 @@
 """Per-call backend configuration. Nested calls inherit it; other threads and tasks do not."""
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 import json
@@ -16,7 +16,7 @@ CURRENT: ContextVar[BackendConfig] = ContextVar("dtu_backend", default=DEFAULT_C
 
 
 @contextmanager
-def configured(config: BackendConfig | None = None) -> Iterator[None]:
+def configured(config: BackendConfig | None = None) -> Generator[None]:
     token = CURRENT.set(config or CURRENT.get())
     try:
         yield
