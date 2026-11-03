@@ -121,6 +121,11 @@ Installer notes that save a round:
 - `apt-get install -y --no-install-recommends ... && rm -rf /var/lib/apt/lists/*`; `apk add --no-cache ...`.
   Almost every twin needs `git curl ca-certificates`.
 - A server must listen on `0.0.0.0`, not `127.0.0.1`, to be reachable through a published port.
+- Slim base images lack `ps`, `ss`, and `file`; add `procps iproute2 file` to a twin you will inspect from inside.
+  Files you `COPY` are owned by root unless you use `--chown`, and a tool installed under `~/.cargo/bin` or
+  `~/.local/bin` needs its folder on `PATH` through `ENV`.
+- The universe's authority is new for each universe, so every step after `COPY --from=dtu-ca` rebuilds on every
+  launch. Put long installs that do not need it before it.
 
 ## Docker knowledge
 

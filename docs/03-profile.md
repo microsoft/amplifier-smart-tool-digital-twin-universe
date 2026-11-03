@@ -211,6 +211,8 @@ native Windows reports `repository-snapshot-unsupported` for this operation. Lim
 128 MiB per file, 1 GiB selected content, 2 GiB history, 32 MiB metadata, and 120 seconds per Git operation.
 Prepare a smaller explicit checkout when these limits are exceeded. Selected source may itself contain credentials.
 
+Base images are smaller than a person's machine: `ubuntu:24.04` and the `-slim` images lack `ps`, `ss`, and `file`. Add `procps iproute2 file` to a twin you will inspect from inside. Files a `COPY` brings in are owned by root unless it has `--chown`, and a tool that installs under `~/.cargo/bin` or `~/.local/bin` needs that folder on `PATH` through `ENV`.
+
 The service names `git` and `gateway` are reserved. A profile with no `repositories[].url`, no `rewrites`, and no `allow` renders no gateway, no authority, and no proxy in anyone's environment.
 
 ### Trusting the universe during a build
@@ -222,7 +224,7 @@ COPY --from=dtu-ca ca.crt /usr/local/share/ca-certificates/digital-twin-universe
 RUN update-ca-certificates
 ```
 
-Two lines, and only for a profile that installs during the build rather than at runtime. Without them the universe still works everywhere else, since `launch` mounts the same file into the running container. `examples/served-repository` is a worked profile that does it.
+Two lines, and only for a profile that installs during the build rather than at runtime. The authority is new for each universe, so every step after these lines is built again on every launch; put long installs that do not need it before them. Without them the universe still works everywhere else, since `launch` mounts the same file into the running container. `examples/served-repository` is a worked profile that does it.
 
 Both lines are Debian and Alpine shaped. An image whose certificates live elsewhere writes its own equivalent; the build context is called `dtu-ca` and the file in it is `ca.crt`.
 
