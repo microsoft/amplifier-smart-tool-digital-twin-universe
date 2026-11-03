@@ -7,7 +7,7 @@ a draft that passes is renamed into place. Failed attempts cost the agent's laun
 draft the agent has not already launched and checked.
 """
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager, suppress
 from contextvars import copy_context
 from dataclasses import dataclass, field
@@ -99,7 +99,7 @@ class UniverseWatch:
         self.appeared: set[str] = set()
 
     @contextmanager
-    def watching(self) -> Iterator[None]:
+    def watching(self) -> Generator[None]:
         stop = threading.Event()
 
         def poll() -> None:

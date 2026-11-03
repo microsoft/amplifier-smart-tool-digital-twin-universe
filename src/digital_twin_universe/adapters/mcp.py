@@ -1,6 +1,6 @@
 """MCP adapter: the universe tools and the dashboard view as an MCP server, a thin surface over the library."""
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from importlib.metadata import version
 from pathlib import Path
@@ -90,7 +90,7 @@ def run_stdio() -> None:
 
 
 @contextmanager
-def _as_tool_error() -> Iterator[None]:
+def _as_tool_error() -> Generator[None]:
     # Anything else the SDK reports only as "Error executing tool", hiding the message and remedy from the model.
     try:
         yield

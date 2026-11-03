@@ -1,0 +1,2 @@
+# Matches `exclude-newer` in pyproject.toml: a version must be 7 days old before it installs.
+minimumReleaseAge: 10080
