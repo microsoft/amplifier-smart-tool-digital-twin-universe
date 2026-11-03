@@ -46,6 +46,8 @@ This is a Smart Tool that must conform to Microsoft's [Amplifier Smart Tool Spec
 
 ## Key Files
 
+Make sure to have in your context or read these files before planning and before making any final changes.
+
 @docs/DEVELOPMENT.md
 @docs/00-vision.md
 

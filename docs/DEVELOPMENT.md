@@ -234,6 +234,9 @@ Each PR that changes the library or CLI already bumps the version: `uv version -
 `SMART_TOOL.md`, `SKILL.md`, and the `@v<version>` and `#v<version>` install pins, which `tests/test_manifest.py`
 holds to the package version.
 
+Each PR also adds its user-visible changes under `## Unreleased` in `CHANGELOG.md`. The version bump renames
+`## Unreleased` to `## X.Y.Z (YYYY-MM-DD)` and starts a new, empty `## Unreleased` above it.
+
 Tag the merge commit right after the PR merges, since main's docs already point at the new tag:
 
 ```bash
