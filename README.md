@@ -4,7 +4,7 @@
 
 Ask your agent:
 
-> Install https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe and its agent skill.
+> Go to https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe and install it.
 
 Then ask it to test an install before you publish:
 
@@ -34,7 +34,7 @@ Prerequisites:
   - `claude` agent provider: `ANTHROPIC_API_KEY`, or any of its other supported modes of [authentication](https://code.claude.com/docs/en/agent-sdk/quickstart).
 - (Optional) Install the Smart Tools skill so your agent knows about Smart Tools: `npx skills add microsoft/amplifier-smart-tools`
 
-To install manually:
+Install the agent skill and the tool:
 
 ```bash
 # Install the Agent Skill so your agent knows about it.
