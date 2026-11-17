@@ -1,4 +1,9 @@
-# Digital Twin Universe Smart Tool
+<h1 align="center">Digital Twin Universe Smart Tool</h1>
+
+<p align="center">
+  <a href="https://microsoft.github.io/amplifier-smart-tool-digital-twin-universe/">Website</a> |
+  <a href="https://microsoft.github.io/amplifier-smart-tools/">Smart Tools</a>
+</p>
 
 ## Quickstart
 
@@ -13,8 +18,6 @@ Then ask it to test an install before you publish:
 For manual setup, see [Installation](#installation).
 
 ## About
-
-[Explore the website](https://microsoft.github.io/amplifier-smart-tool-digital-twin-universe/)
 
 Stands up isolated, realistic environments from a profile using Docker Compose called a "Digital Twin Universe", or DTU. Why would you want to use this?
 - It gives your agents the optimized tools to test software in isolated and repeatable ways. Agents have to prove what they built or changed within a clean environment - the DTU.
