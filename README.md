@@ -5,7 +5,7 @@
   <a href="https://microsoft.github.io/amplifier-smart-tools/">Smart Tools</a>
 </p>
 
-<p align="center">Realistic environments on demand. Your agent proves its work in a clean copy of the real world, not only on your machine.</p>
+<p align="center">Realistic environments on demand. Your agent proves its work in a clean copy of the real world.</p>
 
 ## Quickstart
 
