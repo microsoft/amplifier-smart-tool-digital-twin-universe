@@ -70,7 +70,8 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py313"
-extend-exclude = ["dashboard"]
+# The website theme is a copy of a shared source and stays as it is.
+extend-exclude = ["dashboard", "site/theme", "_site"]
 
 [tool.ruff.lint]
 select = [
@@ -108,7 +109,7 @@ ban-relative-imports = "all"
 
 [tool.ty.src]
 # The templates are rendered into a universe and run there, against dependencies this project does not have.
-exclude = ["src/digital_twin_universe/capabilities/universe/templates"]
+exclude = ["src/digital_twin_universe/capabilities/universe/templates", "site/theme", "_site"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

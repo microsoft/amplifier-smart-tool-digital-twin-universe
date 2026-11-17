@@ -1,0 +1,98 @@
+# The content of the Digital Twin Universe website. The version and platforms come from the manifest.
+kind: tool
+key: digital-twin-universe
+name: Digital Twin Universe
+# Browser tab and search engines.
+title: Digital Twin Universe | Amplifier Smart Tools
+description: >-
+  Digital Twin Universe stands up an isolated, realistic environment from a profile on Docker Compose,
+  so software can be cloned, installed, and run like a real user would, without touching the host.
+
+# The large headline. Each entry is one line.
+promise:
+  - Realistic environments
+  - on demand.
+# The tool's color, from its icon. It tints the parts that are the tool's own.
+tint: '#bcdcf7'
+# Links beside the GitHub button.
+links:
+  - label: Profile reference
+    path: docs/03-profile.md
+
+# The list at the right of the headline. Each entry has a copy button.
+requests:
+  title: Then ask
+  items:
+    - Run my app in a Digital Twin Universe. Install it from this checkout as if it were published on GitHub, run its quickstart, and show me any failures.
+    - Run my web app against a real Postgres in a Digital Twin Universe, and give me the URL to open it.
+    - Reproduce this failure in a Digital Twin Universe.
+
+# The parts of the page under the headline, in order. Each has a kind.
+sections:
+  # The diagram. icon is one of: box, plug, window, check, chat, terminal, loop, spark, library, search.
+  - kind: enclosure
+    title: What is a Universe?
+    # Left box.
+    outside:
+      title: Your machine
+      rows:
+        - name: Commands
+          text: run in the twin, not on your machine
+          icon: terminal
+        - name: Ports
+          text: the universe opens them on localhost
+          icon: plug
+        - name: Docker
+          text: the one thing a universe needs here
+          icon: box
+    # Label on the arrow.
+    link: launch the profile
+    # Right box, with the dashed border.
+    inside:
+      title: A universe
+      note: One Docker Compose project
+      parts:
+        - name: Twin
+          text: Your software runs here, on what looks like a user's machine.
+          icon: box
+        - name: Dependencies
+          text: Provision a database, simulated APIs, or other services
+          icon: library
+        - name: Git server
+          text: Serves your local repositories at their GitHub address.
+          icon: loop
+        - name: Gateway
+          text: Routes a real host to a service you control.
+          icon: plug
+    # Line under the diagram.
+    footer: Launched from a profile. Cleaned up when you're done.
+
+  # The picture of the dashboard.
+  - kind: media
+    title: See every universe.
+    image: site/assets/dashboard.png
+    width: 1888
+    height: 1018
+    alt: The dashboard lists seven universes that are running, starting, degraded, or stopped. A side panel shows one universe, its status, and the addresses it opens on the host.
+    # On a phone, show the top left part at a size that can be read.
+    zoom: true
+
+  # Cards.
+  - kind: cards
+    title: Proof from a clean environment.
+    items:
+      - title: Runs local changes in a realistic environment
+        text: For example, install an unpublished repository from the address it will have on GitHub.
+        icon: library
+      - title: Many at once
+        text: Each universe is separate, so agents can try many things in parallel.
+        icon: loop
+      - title: The real world, modeled
+        text: Your code calls the real address of an API and gets your stand-in service.
+        icon: plug
+
+
+# Other tools at the end of the page, by their key in the theme's family.json.
+related:
+  - reality-check
+  - smart-tool-creator
