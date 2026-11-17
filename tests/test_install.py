@@ -203,7 +203,7 @@ def test_ready_never_calls_preflight_fetch_or_runner(harness: Harness, monkeypat
 
 
 def test_planned_is_tool_free_structured_and_runs_nothing(harness: Harness) -> None:
-    report = lib.install(intelligence=harness.agent, model=DEFAULT_INTELLIGENCE_MODEL, reasoning_effort="medium")
+    report = lib.install(intelligence=harness.agent, model=DEFAULT_INTELLIGENCE_MODEL, reasoning_effort="low")
 
     assert report.outcome == "planned"
     assert "--yes" in report.next
@@ -214,7 +214,7 @@ def test_planned_is_tool_free_structured_and_runs_nothing(harness: Harness) -> N
     assert not request.writable
     assert request.output_schema == InstallPlan.model_json_schema()
     assert request.model == DEFAULT_INTELLIGENCE_MODEL
-    assert request.reasoning_effort == "medium"
+    assert request.reasoning_effort == "low"
     assert '"VERSION_CODENAME": "noble"' in request.prompt
     assert fixture_pages(harness.host)[UBUNTU] in request.prompt
     assert "accept_license is false" in request.prompt
@@ -523,14 +523,14 @@ def test_cli_json_and_exit_by_outcome(
             "--model",
             DEFAULT_INTELLIGENCE_MODELS["amplifier-agent"],
             "--reasoning-effort",
-            "medium",
+            "low",
             "--timeout-seconds",
             "50",
         ],
     )
     assert result.exit_code == exit_code
     assert json.loads(result.stdout)["outcome"] == outcome
-    assert calls == [(True, True, "amplifier-agent", DEFAULT_INTELLIGENCE_MODELS["amplifier-agent"], "medium", 50)]
+    assert calls == [(True, True, "amplifier-agent", DEFAULT_INTELLIGENCE_MODELS["amplifier-agent"], "low", 50)]
 
 
 def test_cli_progress_does_not_pollute_json(harness: Harness) -> None:

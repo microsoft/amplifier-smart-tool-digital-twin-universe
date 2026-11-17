@@ -5,7 +5,7 @@ description: >-
 license: MIT
 metadata:
   author: DavidKoleczek
-  version: "0.6.9"
+  version: "0.6.10"
   repository: https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe
 ---
 
@@ -17,13 +17,13 @@ Stands up an isolated, realistic environment from a profile on Docker Compose so
 
 ```bash
 # as a CLI, choosing the agent provider(s) you want
-uv tool install "digital-twin-universe[all | copilot | amplifier-agent | codex | claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.9"
+uv tool install "digital-twin-universe[all | copilot | amplifier-agent | codex | claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10"
 
 # as a library, from another project
-uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.9"
+uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10"
 
 # once, without installing
-uvx --from "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.9" digital-twin-universe --help
+uvx --from "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10" digital-twin-universe --help
 ```
 
 Verify with `digital-twin-universe manifest`, which needs no credentials.

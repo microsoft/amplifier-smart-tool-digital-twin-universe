@@ -103,9 +103,9 @@ def test_an_injected_intelligence_wins_and_needs_no_agent_provider_installed(mon
         fake,
         DEFAULT_INTELLIGENCE_MODELS["amplifier-agent"],
     )
-    assert select_intelligence(fake, None, "anthropic/claude-opus-5", DEFAULT_INTELLIGENCE_MODELS) == (
+    assert select_intelligence(fake, None, "anthropic/claude-opus-5-5", DEFAULT_INTELLIGENCE_MODELS) == (
         fake,
-        "anthropic/claude-opus-5",
+        "anthropic/claude-opus-5-5",
     )
 
 
@@ -139,11 +139,11 @@ def test_the_install_cli_passes_the_agent_provider_and_model_through(monkeypatch
     monkeypatch.setattr(lib, "install", install)
 
     result = runner.invoke(
-        app, ["install", "--agent-provider", "amplifier-agent", "--model", "anthropic/claude-opus-5"]
+        app, ["install", "--agent-provider", "amplifier-agent", "--model", "anthropic/claude-opus-5-5"]
     )
 
     assert result.exit_code == 1
-    assert received[0][2:4] == ("amplifier-agent", "anthropic/claude-opus-5")
+    assert received[0][2:4] == ("amplifier-agent", "anthropic/claude-opus-5-5")
 
 
 def test_the_create_profile_cli_passes_the_agent_provider_and_model_through(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -156,11 +156,11 @@ def test_the_create_profile_cli_passes_the_agent_provider_and_model_through(monk
     monkeypatch.setattr(lib, "create_profile", create_profile)
 
     result = runner.invoke(
-        app, ["create-profile", "--description", "an app", "--agent-provider", "copilot", "--model", "gpt-6-sol"]
+        app, ["create-profile", "--description", "an app", "--agent-provider", "copilot", "--model", "gpt-6.1-sol"]
     )
 
     assert result.exit_code == 1
-    assert received[0][7:9] == ("copilot", "gpt-6-sol")
+    assert received[0][7:9] == ("copilot", "gpt-6.1-sol")
 
 
 @pytest.mark.parametrize("command", ["install", "create-profile"])
