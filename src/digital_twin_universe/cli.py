@@ -31,7 +31,7 @@ AGENT_PROVIDER_HELP = (
     "amplifier-agent (Amplifier Agent, with the model provider's credentials), codex (OpenAI Codex, with the "
     "Codex sign-in), or claude (Claude Agent SDK). The first installed, in that order, when omitted."
 )
-REASONING_EFFORT_NOTE = "Applies to the copilot, codex, and claude agent providers."
+REASONING_EFFORT_NOTE = "Applies to every agent provider."
 DOCKER_HOST_HELP = "The original Docker endpoint; required for legacy records without a pinned endpoint."
 
 

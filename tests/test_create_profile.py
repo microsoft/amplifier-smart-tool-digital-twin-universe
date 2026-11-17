@@ -836,7 +836,7 @@ def test_cli_prints_json_and_exits_by_outcome(
             "--model",
             DEFAULT_INTELLIGENCE_MODELS["amplifier-agent"],
             "--reasoning-effort",
-            "medium",
+            "low",
             "--timeout-seconds",
             "50",
         ],
@@ -854,7 +854,7 @@ def test_cli_prints_json_and_exits_by_outcome(
             2,
             "amplifier-agent",
             DEFAULT_INTELLIGENCE_MODELS["amplifier-agent"],
-            "medium",
+            "low",
             50,
         )
     ]

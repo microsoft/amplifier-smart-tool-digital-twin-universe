@@ -27,7 +27,7 @@ digital-twin-universe install --yes --accept-license
 # through Amplifier Agent, on another model
 digital-twin-universe install \
   --agent-provider amplifier-agent \
-  --model anthropic/claude-opus-5
+  --model anthropic/claude-opus-5-5
 ```
 
 ```python
@@ -75,14 +75,13 @@ remains, or the deadline passes.
   first installed, in that order, when omitted. Unused when Docker is already usable.
 - `--model`: the model that plans the install and its repair: a Copilot model id for
   `copilot`, `<provider>/<model>` for `amplifier-agent` (for instance
-  `anthropic/claude-opus-5`), a Codex model id for `codex`, a Claude model id for `claude`.
+  `anthropic/claude-opus-5-5`), a Codex model id for `codex`, a Claude model id for `claude`.
   Defaults to `{{ default_intelligence_models.copilot }}` on `copilot`,
   `{{ default_intelligence_models["amplifier-agent"] }}` on `amplifier-agent`,
   `{{ default_intelligence_models.codex }}` on `codex`, and
   `{{ default_intelligence_models.claude }}` on `claude`.
 - `--reasoning-effort`: one of `low`, `medium`, `high`, `xhigh`, `max`. Defaults to
-  `{{ default_intelligence_reasoning_effort }}`. Applies to the `copilot`, `codex`, and `claude`
-  agent providers.
+  `{{ default_intelligence_reasoning_effort }}`. Applies to every agent provider.
 - `--timeout-seconds N`: the deadline for the whole run, at least 1. Defaults to 1200. It
   covers planning, downloads, installers, and waiting for Docker to start; the verification
   universe afterwards has its own 300 seconds to launch.

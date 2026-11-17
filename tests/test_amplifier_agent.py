@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncIterator, Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +31,7 @@ from digital_twin_universe.intelligence.schemas import AgentRequest, HostWorkspa
 from digital_twin_universe.intelligence.submission import MAX_INVALID_SUBMISSIONS, SUBMIT_TOOL, resubmit_prompt
 from digital_twin_universe.schemas import DigitalTwinUniverseError
 
-MODEL = "openai/gpt-6-sol"
+MODEL = "openai/gpt-6.1-sol"
 SESSION = "fake-session"
 SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -70,7 +71,16 @@ class FakeTurn:
 
 class FakeSession:
     def __init__(self, world: "FakeWorld", session_id: str) -> None:
-        self.info = SessionRecord(session_id=session_id, persistence="durable", provider="openai", model="gpt-6-sol")
+        now = datetime.now(UTC)
+        self.info = SessionRecord(
+            session_id=session_id,
+            persistence="durable",
+            provider="openai",
+            model="gpt-6.1-sol",
+            working_directory=str(Path.cwd()),
+            created_at=now,
+            updated_at=now,
+        )
         self._world = world
 
     async def start_turn(self, input: TurnInput) -> FakeTurn:
@@ -180,7 +190,7 @@ def submits(*submissions: dict[str, Any]) -> Script:
 @pytest.mark.parametrize(
     ("model", "selector"),
     [
-        ("openai/gpt-6-sol", ("openai", "gpt-6-sol")),
+        ("openai/gpt-6.1-sol", ("openai", "gpt-6.1-sol")),
         ("azure-openai/deployments/gpt-6", ("azure-openai", "deployments/gpt-6")),
     ],
 )
@@ -188,7 +198,7 @@ def test_the_model_names_the_provider_before_the_first_slash(model: str, selecto
     assert parse_model(model) == selector
 
 
-@pytest.mark.parametrize("model", ["gpt-6-sol", "/gpt-6-sol", "openai/"])
+@pytest.mark.parametrize("model", ["gpt-6.1-sol", "/gpt-6.1-sol", "openai/"])
 def test_a_model_without_a_provider_names_the_expected_form(model: str) -> None:
     with pytest.raises(DigitalTwinUniverseError) as failure:
         parse_model(model)
@@ -211,7 +221,8 @@ def test_a_plain_completion_has_no_tools_and_never_sees_the_callers_directory(
     assert result.session_id == SESSION
     options = fake.options[0]
     assert options.tools == []
-    assert (options.provider, options.model) == ("openai", "gpt-6-sol")
+    assert options.smart_tools is False
+    assert (options.provider, options.model) == ("openai", "gpt-6.1-sol")
     assert fake.directories[0] != caller
     assert not fake.directories[0].exists()
     assert Path.cwd() == caller
@@ -235,6 +246,7 @@ def test_a_workspace_run_is_read_only_unless_writable_and_works_in_the_workspace
     assert Path.cwd() == caller
     for options in fake.options:
         assert options.approvals == "allow"
+        assert options.smart_tools is False
         assert options.reasoning_effort == request(tmp_path).reasoning_effort
         assert Path(str(options.sessions_directory)).is_absolute()
         assert not {"web_fetch", "web_search", "delegate"} & {str(tool) for tool in options.tools or []}
@@ -317,9 +329,9 @@ def test_a_model_without_a_provider_fails_the_run_and_the_preflight_before_any_a
 ) -> None:
     fake = world()
 
-    result = AmplifierAgentIntelligence().run(request(model="gpt-6-sol"))
+    result = AmplifierAgentIntelligence().run(request(model="gpt-6.1-sol"))
     with pytest.raises(DigitalTwinUniverseError):
-        AmplifierAgentIntelligence("gpt-6-sol").preflight()
+        AmplifierAgentIntelligence("gpt-6.1-sol").preflight()
 
     assert result.error is not None
     assert "<provider>/<model>" in result.error
@@ -340,10 +352,11 @@ def test_preflight_starts_and_closes_an_agent_without_tools_and_names_the_remedy
 ) -> None:
     fake = world()
 
-    AmplifierAgentIntelligence("anthropic/claude-opus-5").preflight()
+    AmplifierAgentIntelligence("anthropic/claude-opus-5-5").preflight()
 
     options = fake.options[0]
-    assert (options.provider, options.model, options.tools) == ("anthropic", "claude-opus-5", [])
+    assert (options.provider, options.model, options.tools) == ("anthropic", "claude-opus-5-5", [])
+    assert options.smart_tools is False
     assert fake.closed == 1
 
     world(error=AgentError("engine_unavailable", "lifecycle", "The provider is not installed.", "Install it."))

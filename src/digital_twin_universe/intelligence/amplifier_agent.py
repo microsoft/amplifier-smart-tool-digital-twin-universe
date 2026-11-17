@@ -36,7 +36,7 @@ from digital_twin_universe.schemas import DEFAULT_INTELLIGENCE_MODELS, DigitalTw
 
 READ_ONLY_TOOLS = ["read_file", "glob", "grep", "bash"]
 WRITE_TOOLS = ["write_file", "edit_file"]
-PROVIDERS_DOCUMENTATION = "https://github.com/microsoft/amplifier-agent/blob/v0.25.0/docs/providers.md"
+PROVIDERS_DOCUMENTATION = "https://github.com/microsoft/amplifier-agent/blob/v0.30.0/docs/providers.md"
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 # The runtime rejects arguments that break a tool's declared schema before the handler runs, and ends the turn.
 # Declaring any object and validating in the handler turns a bad submission into a failure the model can retry.
@@ -110,6 +110,9 @@ class AmplifierAgentIntelligence:
             working_directory=directory,
             sessions_directory=state_directory("amplifier-agent"),
             approvals="allow",
+            # On by default, smart tools would add a skill tool and a system prompt section to every agent,
+            # so a plain completion would have a tool and a workspace run more than the tools named above.
+            smart_tools=False,
         )
         deadline = time.monotonic() + request.timeout_seconds
         timed_out = f"The agent did not finish within {request.timeout_seconds} seconds."
@@ -197,6 +200,12 @@ async def _session(agent: Agent, resume: str | None) -> Session:
 
 async def _probe(provider: str, model: str) -> None:
     agent = await create_agent(
-        AgentOptions(provider=provider, model=model, tools=[], sessions_directory=state_directory("amplifier-agent"))
+        AgentOptions(
+            provider=provider,
+            model=model,
+            tools=[],
+            sessions_directory=state_directory("amplifier-agent"),
+            smart_tools=False,
+        )
     )
     await agent.close()

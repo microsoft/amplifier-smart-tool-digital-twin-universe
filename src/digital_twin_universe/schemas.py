@@ -16,7 +16,7 @@ DEFAULT_INTELLIGENCE_MODELS: dict[AgentProvider, str] = {
     "codex": DEFAULT_INTELLIGENCE_MODEL,
     "claude": "claude-opus-5-5",
 }
-DEFAULT_INTELLIGENCE_REASONING_EFFORT: ReasoningEffort = "high"
+DEFAULT_INTELLIGENCE_REASONING_EFFORT: ReasoningEffort = "medium"
 
 SEMVER_PATTERN = r"^\d+\.\d+\.\d+$"
 SLUG_PATTERN = r"^[a-z0-9]+(-[a-z0-9]+)*$"

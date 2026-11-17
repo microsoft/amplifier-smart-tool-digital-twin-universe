@@ -1,2 +1,6 @@
 # Matches `exclude-newer` in pyproject.toml: a version must be 7 days old before it installs.
 minimumReleaseAge: 10080
+
+overrides:
+  # GHSA-g3hv-75wg-m249 is fixed in minimatch 11.0.1. Remove this once eslint, typescript-eslint, and shadcn's ts-morph depend on minimatch 11.
+  minimatch: ^11.0.1

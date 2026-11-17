@@ -29,7 +29,7 @@ digital-twin-universe create-profile \
   --description "a FastAPI app on port 8000 using Postgres" \
   --project . \
   --agent-provider amplifier-agent \
-  --model anthropic/claude-opus-5
+  --model anthropic/claude-opus-5-5
 ```
 
 ```python
@@ -85,15 +85,14 @@ goes on and the result's `notes` say what was missing.
 - `--agent-provider`: what the agent runs through, `{{ agent_providers | join: "` or `" }}`. The
   first installed, in that order, when omitted.
 - `--model`: the model that writes the profile: a Copilot model id for `copilot`,
-  `<provider>/<model>` for `amplifier-agent` (for instance `anthropic/claude-opus-5`), a
+  `<provider>/<model>` for `amplifier-agent` (for instance `anthropic/claude-opus-5-5`), a
   Codex model id for `codex`, a Claude model id for `claude`.
   Defaults to `{{ default_intelligence_models.copilot }}` on `copilot`,
   `{{ default_intelligence_models["amplifier-agent"] }}` on `amplifier-agent`,
   `{{ default_intelligence_models.codex }}` on `codex`, and
   `{{ default_intelligence_models.claude }}` on `claude`.
 - `--reasoning-effort`: one of `low`, `medium`, `high`, `xhigh`, `max`. Defaults to
-  `{{ default_intelligence_reasoning_effort }}`. Applies to the `copilot`, `codex`, and `claude`
-  agent providers.
+  `{{ default_intelligence_reasoning_effort }}`. Applies to every agent provider.
 - `--timeout-seconds N`: the deadline for the whole run, at least 1. Defaults to 1800. A
   launch that builds images takes minutes, so leave room for several.
 - `intelligence`, library only: the `Intelligence` implementation the agent runs through,
