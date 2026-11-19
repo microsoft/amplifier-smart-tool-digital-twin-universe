@@ -1,6 +1,6 @@
 [project]
 name = "digital-twin-universe"
-version = "0.6.10"
+version = "0.6.11"
 description = "Stands up an isolated, realistic environment from a profile on Docker Compose so software can be tested as though actually deployed. Use when passing tests on your machine is not enough evidence and code must run against real dependencies, published local repositories, and rewritten URLs without touching the host"
 readme = "README.md"
 authors = [
@@ -8,17 +8,17 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "certifi>=2026.10.23,<2027.0.0",
-    "fastapi>=0.141.1,<0.163.0",
+    "certifi>=2026.10.23",
+    "fastapi>=0.141.1,<1.0.0",
     "filelock>=4.2.4,<5.0.0",
     "jsonschema>=4.26.0,<5.0.0",
     "mcp>=2.3,<3.0",
     "pydantic>=2.14,<3.0",
     "python-liquid>=2.3.6,<3.0.0",
-    "python-on-whales>=0.81.0,<0.82.0",
+    "python-on-whales>=0.81.0,<1.0.0",
     "pyyaml>=6.0.3,<7.0.0",
-    "typer>=0.27.3,<0.29.0",
-    "uvicorn>=0.53.0,<0.55.0",
+    "typer>=0.29.1,<1.0.0",
+    "uvicorn>=0.53.0,<1.0.0",
 ]
 
 [project.urls]
@@ -32,13 +32,13 @@ copilot = [
     "github-copilot-sdk>=1.0.27,<2.0.0",
 ]
 amplifier-agent = [
-    "amplifier-agent @ git+https://github.com/microsoft/amplifier-agent@v0.30.0#subdirectory=packages/python",
+    "amplifier-agent @ git+https://github.com/microsoft/amplifier-agent#subdirectory=packages/python",
 ]
 codex = [
     "openai-codex>=0.159.2,<1.0.0",
 ]
 claude = [
-    "claude-agent-sdk>=0.2.174,<0.3.0",
+    "claude-agent-sdk>=0.2.174,<1.0.0",
 ]
 all = [
     "digital-twin-universe[copilot,amplifier-agent,codex,claude]",

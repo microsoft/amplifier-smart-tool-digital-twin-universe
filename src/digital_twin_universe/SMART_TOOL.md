@@ -1,7 +1,7 @@
 ---
 smart_tool_format: 1
 name: digital-twin-universe
-version: 0.6.10
+version: 0.6.11
 description: >-
   Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed
 use_cases:
@@ -45,7 +45,7 @@ requires:
       instance OPENAI_API_KEY for its default model. Without them, the model-backed
       capabilities cannot run through amplifier-agent. See the full list of options at the install link.
     optional: true
-    install: https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md
+    install: https://github.com/microsoft/amplifier-agent/blob/main/docs/providers.md
   - name: codex-sign-in
     purpose: >-
       The Codex CLI signed in with ChatGPT or an API key, for the codex agent provider.
@@ -143,28 +143,28 @@ write from the examples, `validate-profile` and `launch` are enough.
 
 ```bash
 # as a CLI
-uv tool install "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10"
+uv tool install "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
 
 # as a library, from another project
-uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10"
+uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
 
 # once, without installing
-uvx --from "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10" digital-twin-universe --help
+uvx --from "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11" digital-twin-universe --help
 ```
 
 `[all]` brings every agent provider the model-backed capabilities run through. Alternatives:
 
 ```bash
 # Only the GitHub Copilot agent provider
-uv tool install "digital-twin-universe[copilot] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10"
+uv tool install "digital-twin-universe[copilot] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
 # Only the Amplifier Agent agent provider
-uv tool install "digital-twin-universe[amplifier-agent] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10"
+uv tool install "digital-twin-universe[amplifier-agent] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
 # Only the Codex agent provider
-uv tool install "digital-twin-universe[codex] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10"
+uv tool install "digital-twin-universe[codex] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
 # Only the Claude agent provider
-uv tool install "digital-twin-universe[claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10"
+uv tool install "digital-twin-universe[claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
 # Deterministic capabilities only
-uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10
+uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11
 ```
 
 Verify with `digital-twin-universe manifest`, which needs no credentials. Each release is a `v<version>` tag
@@ -208,7 +208,7 @@ provider, picked with `--agent-provider`, or the first installed of `copilot`,
 - `amplifier-agent`: [Amplifier Agent](https://github.com/microsoft/amplifier-agent), calling
   the model provider named in `--model <provider>/<model>` with that provider's credentials,
   for instance `OPENAI_API_KEY` for the default `openai/...` model. See its
-  [providers](https://github.com/microsoft/amplifier-agent/blob/v1/docs/providers.md).
+  [providers](https://github.com/microsoft/amplifier-agent/blob/main/docs/providers.md).
 - `codex`: [OpenAI Codex](https://github.com/openai/codex), with the user's Codex configuration.
   The Codex CLI must be signed in with ChatGPT or an API key, see
   [authentication](https://developers.openai.com/codex/auth).
