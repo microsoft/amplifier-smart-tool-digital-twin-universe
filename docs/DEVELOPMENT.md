@@ -12,7 +12,7 @@ Install:
 - [GitHub CLI](https://cli.github.com/) for intelligence features through the `copilot` agent provider.
 - [Node.js](https://nodejs.org/) 22+ and [pnpm](https://pnpm.io/installation), optional: only to change the dashboard's frontend. The compiled dashboard is committed, so running it needs neither.
 - [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites) for intelligent features through the `copilot` agent provider.
-- [Model provider credentials](https://github.com/microsoft/amplifier-agent/blob/v0.30.0/docs/providers.md), such as `OPENAI_API_KEY`, for intelligent features through the `amplifier-agent` agent provider.
+- [Model provider credentials](https://github.com/microsoft/amplifier-agent/blob/main/docs/providers.md), such as `OPENAI_API_KEY`, for intelligent features through the `amplifier-agent` agent provider.
 - [Codex CLI](https://github.com/openai/codex) [signed in](https://developers.openai.com/codex/auth) with ChatGPT or an API key, for intelligent features through the `codex` agent provider.
 - [`ANTHROPIC_API_KEY` or a cloud provider's credentials](https://code.claude.com/docs/en/agent-sdk/quickstart), for intelligent features through the `claude` agent provider.
 
@@ -164,10 +164,10 @@ An update never applies a major version upgrade. Collect each one, check whether
 
 ##### Python
 
-1. Runtime dependencies and extras carry a cap at the next major, for example `"mcp>=2.3,<3.0"`, so we never auto upgrade to a new major. A 0.x package treats its minor as the major, so its cap is the next minor, for example `"fastapi>=0.141.1,<0.142.0"`. Dev dependencies need no cap; keep the ones they have.
+1. Digital Twin Universe is also a library, so runtime dependencies and extras take wide ranges that other projects can share. Each is capped at the next major, for example `"mcp>=2.3,<3.0"`, and a 0.x package at `<1.0.0`, for example `"fastapi>=0.141.1,<1.0.0"`. A lower cap is only for a release known to break Digital Twin Universe, with the reason here. `certifi` has calendar versions and no cap. Dev dependencies need no cap; keep the ones they have.
 1. For each PyPI dependency in `[project.dependencies]`, `[project.optional-dependencies]`, and `[dependency-groups]`, find the latest version. Read `https://pypi.org/pypi/<name>/json` and take the newest non-prerelease, non-yanked release whose earliest file upload is at least 7 days old. Do not trust the top of the PyPI history page; it ignores the cooldown.
-1. Raise each floor that is behind to that version, keeping the form the entry already uses (`>=2.13,<3.0` stays two-part, `>=0.27.2,<0.28.0` stays three-part). Never raise a cap: a latest version at or past the cap is a major upgrade to report.
-1. Move `amplifier-agent`, the one git dependency, to its newest release tag, from `gh release list -R microsoft/amplifier-agent -L 1`. It has no cooldown. It is pinned exactly, so it moves even across a 0.x minor. Its tag is also in the providers documentation links; replace every match of `git grep <old-tag>`.
+1. Raise each floor that is behind to that version, keeping the form the entry already uses (`>=2.13,<3.0` stays two-part, `>=0.141.1,<1.0.0` stays three-part). Never raise a cap: a latest version at or past the cap is a major upgrade to report.
+1. `amplifier-agent`, the one git dependency, follows its default branch and has no cooldown, so `uv lock --upgrade` below moves it to its latest commit.
 1. Update `uv_build` under `[build-system]` to its latest version at least 7 days old, moving its cap with it. It is the one exception to the cap rule.
 1. `exclude-newer-package` exempts a package from the cooldown for a security fix. Remove each entry whose comment condition now holds.
 1. Run `uv lock --upgrade`. It respects the cooldown and the caps, and moves transitive dependencies too. Do this even when `pyproject.toml` did not change.

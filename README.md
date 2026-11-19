@@ -36,7 +36,7 @@ Prerequisites:
 - [Docker](https://docs.docker.com/get-started/get-docker/)
 - For the model-backed capabilities, one of:
   - `copilot` agent provider: [GitHub CLI](https://cli.github.com/) signed in to an account with a [GitHub Copilot subscription](https://github.com/github/copilot-cli#prerequisites).
-  - `amplifier-agent` agent provider: the model provider's credentials, for instance `OPENAI_API_KEY` for the default `openai/...` model. See [providers](https://github.com/microsoft/amplifier-agent/blob/v0.30.0/docs/providers.md).
+  - `amplifier-agent` agent provider: the model provider's credentials, for instance `OPENAI_API_KEY` for the default `openai/...` model. See [providers](https://github.com/microsoft/amplifier-agent/blob/main/docs/providers.md).
   - `codex` agent provider: the [Codex CLI](https://github.com/openai/codex) signed in with ChatGPT or an API key. See [authentication](https://developers.openai.com/codex/auth).
   - `claude` agent provider: `ANTHROPIC_API_KEY`, or any of its other supported modes of [authentication](https://code.claude.com/docs/en/agent-sdk/quickstart).
 - (Optional) Install the Smart Tools skill so your agent knows about Smart Tools: `npx skills add microsoft/amplifier-smart-tools`
@@ -45,9 +45,9 @@ Install the agent skill and the tool:
 
 ```bash
 # Install the Agent Skill so your agent knows about it.
-npx skills add microsoft/amplifier-smart-tool-digital-twin-universe#v0.6.10
+npx skills add microsoft/amplifier-smart-tool-digital-twin-universe#v0.6.11
 # Install the tool, choosing the provider(s) you want
-uv tool install "digital-twin-universe[all | copilot | amplifier-agent | codex | claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10"
+uv tool install "digital-twin-universe[all | copilot | amplifier-agent | codex | claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
 # Check setup; if it needs fixing, this plans the fix with the agent provider. Apply it with --yes.
 digital-twin-universe install
 ```
@@ -55,7 +55,7 @@ digital-twin-universe install
 To use it as a library:
 
 ```bash
-uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.10"
+uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
 ```
 
 Deterministic operations need no model provider; omit extras for a core-only install. Installing the package
