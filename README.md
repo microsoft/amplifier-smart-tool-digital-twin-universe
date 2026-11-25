@@ -45,9 +45,9 @@ Install the agent skill and the tool:
 
 ```bash
 # Install the Agent Skill so your agent knows about it.
-npx skills add microsoft/amplifier-smart-tool-digital-twin-universe#v0.6.11
+npx skills add microsoft/amplifier-smart-tool-digital-twin-universe#v0.6.12
 # Install the tool, choosing the provider(s) you want
-uv tool install "digital-twin-universe[all | copilot | amplifier-agent | codex | claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
+uv tool install "digital-twin-universe[all | copilot | amplifier-agent | codex | claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.12"
 # Check setup; if it needs fixing, this plans the fix with the agent provider. Apply it with --yes.
 digital-twin-universe install
 ```
@@ -55,7 +55,7 @@ digital-twin-universe install
 To use it as a library:
 
 ```bash
-uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
+uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.12"
 ```
 
 Deterministic operations need no model provider; omit extras for a core-only install. Installing the package

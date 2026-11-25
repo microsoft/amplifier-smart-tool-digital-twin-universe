@@ -31,6 +31,7 @@ from digital_twin_universe.schemas import (
     FileArchive,
     HostReport,
     InstallReport,
+    LaunchTerminalWitness,
     Manifest,
     ProfileReport,
     ReasoningEffort,
@@ -260,6 +261,12 @@ def launch_id(operation_id: str, config: BackendConfig | None = None) -> str:
     """Resolve a caller-owned launch id without Docker or side effects."""
     with configured(config):
         return state.new_id("launch", operation_id)
+
+
+def launch_terminal_witness(operation_id: str, config: BackendConfig | None = None) -> LaunchTerminalWitness | None:
+    """Read a v1 launch witness for the exact attempt, or None when settlement is unknown. Never contacts Docker."""
+    with configured(config):
+        return state.launch_terminal_witness(operation_id)
 
 
 def stop(id: str, config: BackendConfig | None = None, timeout_seconds: int = 10) -> Stopped:

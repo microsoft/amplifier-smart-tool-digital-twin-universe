@@ -16,7 +16,13 @@ from filelock import FileLock, Timeout
 from pydantic import BaseModel, Field, PrivateAttr, ValidationError
 
 from digital_twin_universe.capabilities.universe.runtime import CURRENT
-from digital_twin_universe.schemas import Destroyed, DigitalTwinUniverseError, LifecyclePhase, UrlSpec
+from digital_twin_universe.schemas import (
+    Destroyed,
+    DigitalTwinUniverseError,
+    LaunchTerminalWitness,
+    LifecyclePhase,
+    UrlSpec,
+)
 
 STATE_ROOT = Path.home() / ".digital-twin-universe" / "universes"
 RECORD_FILE = "universe.json"
@@ -92,6 +98,41 @@ def write(record: UniverseRecord) -> None:
     checked_id(record.id)
     record._root = record._root or root()
     atomic_text(record.state_path / RECORD_FILE, record.model_dump_json(indent=2))
+
+
+def launch_witness_path(id: str) -> Path:
+    return root() / f".{checked_id(id)}.launch-terminal.json"
+
+
+def endpoint_digest(host: str) -> str:
+    return hashlib.sha256(host.encode()).hexdigest()
+
+
+def launch_terminal_witness(operation_id: str) -> LaunchTerminalWitness | None:
+    id = new_id("launch", operation_id)
+    path = launch_witness_path(id)
+    try:
+        if not path.is_file():
+            return None
+        with path.open("rb") as stream:
+            payload = stream.read(8193)
+        if len(payload) > 8192:
+            return None
+        witness = LaunchTerminalWitness.model_validate_json(payload)
+    except (OSError, ValidationError):
+        return None
+    if witness.operation_id != operation_id or witness.project != id:
+        return None
+    requested = CURRENT.get().docker_host
+    if requested and witness.docker_endpoint_sha256 != endpoint_digest(requested):
+        return None
+    if witness.completed not in (
+        ("final-up",),
+        ("bootstrap-up", "final-up"),
+        ("bootstrap-up", "buildx-bake", "final-up"),
+    ):
+        return None
+    return witness
 
 
 def allocate(record: UniverseRecord) -> None:

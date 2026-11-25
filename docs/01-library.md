@@ -305,6 +305,50 @@ Raises:
 - `operation-id-invalid`, `operation-conflict`, `operation-incomplete`, `operation-removed`, `operation-busy`
 - `allocation-failed`, `docker-endpoint-unknown`, `docker-endpoint-missing`, and repository snapshot errors
 
+### Terminal launch witness
+
+`launch_terminal_witness(operation_id: str, config: BackendConfig | None = None) -> LaunchTerminalWitness | None`
+reads private state only. For a new launch with an operation id, DTU saves a v1 witness after the originating
+foreground Compose stream returns normally from the final `up --wait`, with all earlier dispatched passes
+also returned. `completed` records the observed bootstrap, Bake, and final Up passes in order.
+`error_category="post-dispatch-failed"` means the later measurement or local finalization threw; the
+existing launch exception still applies. `rollback="not-dispatched-by-dtu"` is not proof of rollback or absence:
+DTU does not automatically roll back a launch. The witness survives explicit destroy; it is not that
+destroy's receipt.
+
+V1 requires a POSIX local Unix socket. DTU observes the same socket device and inode and Docker Engine ID before and
+after dispatch. The endpoint digest is the SHA-256 of the exact pinned endpoint string, not of the engine ID.
+The ID is historical, not a daemon boot id or a Buildx builder identity. This is not an attestation against
+a proxy that retargets the endpoint or a privileged state writer. The witness says DTU has no further launch
+dispatch to issue, not that application services are healthy now, that a remote builder has no background
+work, or that the project has no resources.
+
+Use the original state root, non-secret operation id, and pinned endpoint. Invalid operation ids raise
+`operation-id-invalid`; absent, unreadable, mismatched, or unrecognized evidence returns `None`. For example,
+after losing a launch response:
+
+```python
+from pathlib import Path
+
+from digital_twin_universe.lib import BackendConfig, launch_terminal_witness
+
+config = BackendConfig(
+    state_root=Path("/path/to/private/dtu-state"),
+    docker_host="unix:///path/to/docker.sock",
+)
+witness = launch_terminal_witness("caller-persisted-request-id", config=config)
+if witness is None:
+    dispatch = "unknown"
+else:
+    dispatch = "foreground-settled"
+    # Match witness.engine_id against separately trusted engine evidence before any live follow-up.
+```
+
+Unknown includes older launches, nonzero Docker/Compose/Buildx exits (including cancellations), missing or
+changed endpoint identity, and interruption before durable publication. In particular, an exported image, a
+reaped client, a generic launch error, or an empty inventory does not attest that an upstream failure or any
+internal rollback settled. Do not authorize retry or resource removal from this read.
+
 ## List
 
 Every universe recorded under the selected state root, running or not, oldest first.

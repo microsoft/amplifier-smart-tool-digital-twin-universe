@@ -197,6 +197,26 @@ class ProfileReport(BaseModel):
 UniverseState = Literal["starting", "running", "degraded", "stopped"]
 LifecyclePhase = Literal["allocated", "launching", "ready", "failed", "stopping", "stopped", "destroying"]
 Health = Literal["starting", "healthy", "unhealthy"]
+LaunchDispatchPhase = Literal["bootstrap-up", "buildx-bake", "final-up"]
+
+
+class LaunchTerminalWitness(BaseModel):
+    """Historical settlement at DTU's foreground boundary, not Docker resource or rollback evidence."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    version: Literal[1]
+    operation_id: str = Field(min_length=1, max_length=512)
+    project: str = Field(pattern=r"^dtu-op-[0-9a-f]{32}$")
+    docker_endpoint_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    engine_id: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9:-]{0,127}$")
+    socket_device: int = Field(ge=0)
+    socket_inode: int = Field(gt=0)
+    phase: Literal["final-up"]
+    # Every listed foreground stream returned normally. No code or stderr from a failed CLI is authoritative.
+    completed: tuple[LaunchDispatchPhase, ...] = Field(max_length=3)
+    error_category: Literal["post-dispatch-failed"] | None
+    rollback: Literal["not-dispatched-by-dtu"]
 
 
 class Service(BaseModel):
