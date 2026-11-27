@@ -1,7 +1,7 @@
 ---
 smart_tool_format: 1
 name: digital-twin-universe
-version: 0.6.11
+version: 0.6.12
 description: >-
   Stands up an isolated, realistic environment from a profile on Docker Compose so software can be cloned, installed, run, and experienced like a real user would, without touching the host. Use when passing tests on your machine is not enough evidence and code must be exercised as though actually deployed
 use_cases:
@@ -143,28 +143,28 @@ write from the examples, `validate-profile` and `launch` are enough.
 
 ```bash
 # as a CLI
-uv tool install "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
+uv tool install "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.12"
 
 # as a library, from another project
-uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
+uv add "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.12"
 
 # once, without installing
-uvx --from "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11" digital-twin-universe --help
+uvx --from "digital-twin-universe[all] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.12" digital-twin-universe --help
 ```
 
 `[all]` brings every agent provider the model-backed capabilities run through. Alternatives:
 
 ```bash
 # Only the GitHub Copilot agent provider
-uv tool install "digital-twin-universe[copilot] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
+uv tool install "digital-twin-universe[copilot] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.12"
 # Only the Amplifier Agent agent provider
-uv tool install "digital-twin-universe[amplifier-agent] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
+uv tool install "digital-twin-universe[amplifier-agent] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.12"
 # Only the Codex agent provider
-uv tool install "digital-twin-universe[codex] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
+uv tool install "digital-twin-universe[codex] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.12"
 # Only the Claude agent provider
-uv tool install "digital-twin-universe[claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11"
+uv tool install "digital-twin-universe[claude] @ git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.12"
 # Deterministic capabilities only
-uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.11
+uv tool install git+https://github.com/microsoft/amplifier-smart-tool-digital-twin-universe@v0.6.12
 ```
 
 Verify with `digital-twin-universe manifest`, which needs no credentials. Each release is a `v<version>` tag

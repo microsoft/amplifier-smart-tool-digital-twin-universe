@@ -319,9 +319,11 @@ def test_only_a_gateway_universe_with_buildx_builds_before_compose(
     monkeypatch.setattr(
         launch_module,
         "_up",
-        lambda client, record, timeout_seconds, services=None, build=True: passes.append((services, build)),
+        lambda client, record, timeout_seconds, services=None, build=True, **kwargs: passes.append((services, build)),
     )
-    monkeypatch.setattr(launch_module, "_bake", lambda client, record, services, grant: baked.append((services, grant)))
+    monkeypatch.setattr(
+        launch_module, "_bake", lambda client, record, services, grant, **kwargs: baked.append((services, grant))
+    )
 
     launch_module.launch(PROFILE_PATH)
 

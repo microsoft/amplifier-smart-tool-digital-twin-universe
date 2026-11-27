@@ -1,5 +1,6 @@
 """Launch: from a profile to a running, ready universe."""
 
+from concurrent.futures import CancelledError
 from contextlib import suppress
 import hashlib
 from pathlib import Path
@@ -16,6 +17,7 @@ import yaml
 from digital_twin_universe.capabilities.universe import overlay, runtime, state
 from digital_twin_universe.capabilities.universe import validate as validate_module
 from digital_twin_universe.capabilities.universe.compose import compose_client, measure, translate_docker_error
+from digital_twin_universe.capabilities.universe.launch_evidence import LaunchEvidence
 from digital_twin_universe.capabilities.universe.profile import Profile
 from digital_twin_universe.capabilities.universe.state import UniverseRecord
 from digital_twin_universe.schemas import DigitalTwinUniverseError, ProfileReport, Universe
@@ -73,6 +75,14 @@ def launch(profile: str | Path, timeout_seconds: int = 600, operation_id: str | 
                 "operation-removed",
                 f"Environment {id} was already removed.",
                 "Use a new operation id for a newly requested environment.",
+                id,
+                operation_id,
+            )
+        if state.launch_witness_path(id).is_file():
+            raise DigitalTwinUniverseError(
+                "operation-incomplete",
+                f"Launch {id} has retained evidence but no current ownership record.",
+                "Preserve the retained evidence and inspect the original environment; do not replay this operation.",
                 id,
                 operation_id,
             )
@@ -162,20 +172,41 @@ def _launch_owned(record: UniverseRecord, loaded: Profile, timeout_seconds: int)
     # can leave it behind. Recovery never loads or replays this file.
     definition = record.state_path / "launch.private.yaml"
     state.atomic_text(definition, yaml.safe_dump(_literal_compose(loaded.config), sort_keys=False))
+    evidence: LaunchEvidence | None = None
     try:
-        client = compose_client(record.id, [definition, *rendered.files])
-        if rendered.bootstrap:
-            _up(client, record, timeout_seconds, services=rendered.bootstrap)
-            overlay.export_ca(record, rendered)
-        buildx = _buildx_version(client) if rendered.gateway_builds else None
-        if buildx is not None:
-            _bake(client, record, rendered.gateway_builds, grant=buildx >= BAKE_ALLOW_VERSION)
-        _up(client, record, timeout_seconds, build=buildx is None)
-        record.phase = "ready"
-        state.write(record)
-        return measure(record)
-    finally:
-        definition.unlink(missing_ok=True)
+        try:
+            client = compose_client(record.id, [definition, *rendered.files])
+            evidence = LaunchEvidence(record, client)
+            if rendered.bootstrap:
+                _up(client, record, timeout_seconds, services=rendered.bootstrap, evidence=evidence)
+                overlay.export_ca(record, rendered)
+            buildx = _buildx_version(client) if rendered.gateway_builds else None
+            if buildx is not None:
+                _bake(client, record, rendered.gateway_builds, grant=buildx >= BAKE_ALLOW_VERSION, evidence=evidence)
+            _up(client, record, timeout_seconds, build=buildx is None, evidence=evidence)
+            record.phase = "ready"
+            state.write(record)
+            result = measure(record)
+        except BaseException as error:
+            if not isinstance(error, Exception) or _interrupted(error):
+                # A later local cleanup error can mask the incoming cancellation.
+                evidence = None
+            raise
+        finally:
+            definition.unlink(missing_ok=True)
+    except Exception as error:
+        if evidence is not None and not _interrupted(error):
+            evidence.finish("post-dispatch-failed")
+        raise
+    # No further launch mutation or DTU rollback follows the completed foreground passes.
+    evidence.finish()
+    return result
+
+
+def _interrupted(error: Exception) -> bool:
+    return isinstance(error, (CancelledError, InterruptedError)) or (
+        isinstance(error, DockerException) and (error.return_code < 0 or error.return_code >= 128)
+    )
 
 
 def _literal_compose(value: Any) -> Any:
@@ -208,6 +239,7 @@ def _up(
     timeout_seconds: int,
     services: list[str] | None = None,
     build: bool = True,
+    evidence: LaunchEvidence | None = None,
 ) -> None:
     """One `compose up` pass. Compose reports progress on stderr, which is passed through so a person sees it."""
     for _, line in client.compose.up(
@@ -219,6 +251,8 @@ def _up(
         stream_logs=True,
     ):
         sys.stderr.write(line.decode(errors="replace"))
+    if evidence is not None:
+        evidence.completed.append("final-up" if services is None else "bootstrap-up")
 
 
 def _buildx_version(client: DockerClient) -> tuple[int, int] | None:
@@ -231,7 +265,13 @@ def _buildx_version(client: DockerClient) -> tuple[int, int] | None:
     return (int(version["major"]), int(version["minor"])) if version is not None else None
 
 
-def _bake(client: DockerClient, record: UniverseRecord, services: list[str], grant: bool) -> None:
+def _bake(
+    client: DockerClient,
+    record: UniverseRecord,
+    services: list[str],
+    grant: bool,
+    evidence: LaunchEvidence | None = None,
+) -> None:
     """Build the images that reach the gateway over the host network, before Compose starts them.
 
     Compose cannot build these itself: it hands Bake a definition without `--allow=network.host`, which Buildx
@@ -262,6 +302,8 @@ def _bake(client: DockerClient, record: UniverseRecord, services: list[str], gra
     ]
     for _, line in stream_stdout_and_stderr(command):
         sys.stderr.write(line.decode(errors="replace"))
+    if evidence is not None:
+        evidence.completed.append("buildx-bake")
 
 
 def _build_config(config: dict[str, Any], services: list[str]) -> dict[str, Any]:
